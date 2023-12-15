@@ -12,8 +12,9 @@ def test(config: dict):
     try:
         point = new_point()
         with mysql.connector.connect(**config["db_config"]) as conn:
-            id = insert_edge(conn, dict(context=point, source="", code="", target=""))
-            assert id != point
+            with conn.cursor() as cursor:
+                id = insert_edge(cursor, dict(context=point, source="", code="", target=""))
+                assert id != point
             conn.rollback()
     except Exception:
         log.error("failed", exc_info=True)

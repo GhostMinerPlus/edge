@@ -1,18 +1,18 @@
 """executor"""
 
 import uuid
-from mysql.connector.connection import MySQLConnection
+from mysql.connector.connection import MySQLConnection, MySQLCursor
 
 
-def insert_edge(conn: MySQLConnection, edge_form: dict) -> str:
+def insert_edge(cursor: MySQLCursor, edge_form: dict) -> str:
     edge_form["id"] = new_point()
 
-    with conn.cursor() as cursor:
-        cursor.execute(
-            "insert into edge_t (id, context, source, code, target) \
-                values (%(id)s, %(context)s, %(source)s, %(code)s, %(target)s)",
-            edge_form,
-        )
+    cursor.execute(
+        "insert into edge_t (id, context, source, code, target) \
+            values (%(id)s, %(context)s, %(source)s, %(code)s, %(target)s)",
+        edge_form,
+    )
+
     return edge_form["id"]
 
 
@@ -25,7 +25,8 @@ class Executor:
         self.__conn = conn
 
     def insert_edge(self, edge_form: dict) -> str:
-        id = insert_edge(self.__conn, edge_form)
+        with self.__conn.cursor() as cursor:
+            id = insert_edge(cursor, edge_form)
         self.__conn.commit()
         return id
 
