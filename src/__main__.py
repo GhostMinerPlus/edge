@@ -1,7 +1,6 @@
 """Main"""
 
 import logging
-from sys import argv
 import toml
 import mysql.connector
 import tornado
