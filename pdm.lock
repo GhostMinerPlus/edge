@@ -5,7 +5,16 @@
 groups = ["default"]
 strategy = ["cross_platform"]
 lock_version = "4.4"
-content_hash = "sha256:6c88712221a03d96f46f9877152ba1720d43dd3f0138db8f0336aeb6945fea3d"
+content_hash = "sha256:72b4d312ddf6854362d47f493f1df65c161608673a6958ef8f672ff8a44b1c16"
+
+[[package]]
+name = "asyncio"
+version = "3.4.3"
+summary = "reference implementation of PEP 3156"
+files = [
+    {file = "asyncio-3.4.3-py3-none-any.whl", hash = "sha256:c4d18b22701821de07bd6aea8b53d21449ec0ec5680645e5317062ea21817d2d"},
+    {file = "asyncio-3.4.3.tar.gz", hash = "sha256:83360ff8bc97980e4ff25c964c7bd3923d333d177aa4f7fb736b019f26c7cb41"},
+]
 
 [[package]]
 name = "logging"

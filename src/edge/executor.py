@@ -22,11 +22,11 @@ def new_point() -> str:
 
 class Executor:
     def __init__(self, conn: MySQLConnection):
-        self.conn = conn
+        self.__conn = conn
 
     def insert_edge(self, edge_form: dict) -> str:
-        id = insert_edge(self.conn, edge_form)
-        self.conn.commit()
+        id = insert_edge(self.__conn, edge_form)
+        self.__conn.commit()
         return id
 
     def new_point(self) -> str:
