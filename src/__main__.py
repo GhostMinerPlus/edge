@@ -16,6 +16,6 @@ if __name__ == "__main__":
     logging.info("hello, this is %s", config["name"])
 
     line_path = argv[1]
-    clazz = getattr(bench, line_path)
+    clazz = getattr(edge, line_path)
     line = clazz()
     line.run()
