@@ -133,59 +133,61 @@ mod tests {
     #[test]
     fn insert_edge_v() {
         init();
+        let f = async {
+            let config: Config =
+                toml::from_str(&fs::read_to_string("config.toml").unwrap()).unwrap();
+
+            let pool: Pool<MySql> = sqlx::Pool::connect(&config.db_url).await.unwrap();
+            let mut tr = pool.begin().await.unwrap();
+            let conn = tr.acquire().await.unwrap();
+
+            let r: io::Result<()> = (|| async move {
+                let id_v = super::insert_edge_v(
+                    conn,
+                    &vec![EdgeFrom {
+                        context: String::new(),
+                        source: String::new(),
+                        code: String::new(),
+                        target: String::new(),
+                    }],
+                )
+                .await?;
+                super::insert_edge_v(
+                    conn,
+                    &vec![EdgeFrom {
+                        context: String::new(),
+                        source: String::new(),
+                        code: "deleted".to_string(),
+                        target: id_v[0].clone(),
+                    }],
+                )
+                .await?;
+                Ok(())
+            })()
+            .await;
+
+            tr.rollback().await.unwrap();
+            r.unwrap();
+        };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async {
-                let config: Config =
-                    toml::from_str(&fs::read_to_string("config.toml").unwrap()).unwrap();
-
-                let pool: Pool<MySql> = sqlx::Pool::connect(&config.db_url).await.unwrap();
-                let mut tr = pool.begin().await.unwrap();
-                let conn = tr.acquire().await.unwrap();
-
-                let r: io::Result<()> = (|| async move {
-                    let id_v = super::insert_edge_v(
-                        conn,
-                        &vec![EdgeFrom {
-                            context: String::new(),
-                            source: String::new(),
-                            code: String::new(),
-                            target: String::new(),
-                        }],
-                    )
-                    .await?;
-                    super::insert_edge_v(
-                        conn,
-                        &vec![EdgeFrom {
-                            context: String::new(),
-                            source: String::new(),
-                            code: "deleted".to_string(),
-                            target: id_v[0].clone(),
-                        }],
-                    )
-                    .await?;
-                    Ok(())
-                })()
-                .await;
-
-                tr.rollback().await.unwrap();
-                r.unwrap();
-            });
+            .block_on(f);
     }
 
     #[test]
     fn test_new_point() {
         init();
+        let f = async {
+            let id = super::new_point();
+            let id1 = super::new_point();
+            assert_ne!(id, id1);
+        };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap()
-            .block_on(async {
-                let id = super::new_point();
-                let id1 = super::new_point();
-                assert_ne!(id, id1);
-            })
+            .block_on(f)
     }
 }
