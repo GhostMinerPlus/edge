@@ -79,6 +79,42 @@ pub async fn new_point() -> (StatusCode, String) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
+    use sqlx::{Acquire, MySql, Pool};
+
+    use crate::Config;
+
+    use super::EdgeFrom;
+
+    #[test]
+    fn insert_edge() {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let config: Config =
+                    toml::from_str(&fs::read_to_string("config.toml").unwrap()).unwrap();
+
+                let pool: Pool<MySql> = sqlx::Pool::connect(&config.db_url).await.unwrap();
+                let mut tr = pool.begin().await.unwrap();
+                let conn = tr.acquire().await.unwrap();
+                let r = super::__insert_edge(
+                    conn,
+                    &EdgeFrom {
+                        context: String::new(),
+                        source: String::new(),
+                        code: String::new(),
+                        target: String::new(),
+                    },
+                )
+                .await;
+                tr.rollback().await.unwrap();
+                r.unwrap();
+            });
+    }
+
     #[test]
     fn test_new_point() {
         tokio::runtime::Builder::new_multi_thread()
