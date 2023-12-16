@@ -1,4 +1,4 @@
-mod edge;
+mod edge_service;
 
 use std::{
     io::{Error, ErrorKind},
@@ -12,7 +12,7 @@ use crate::AppState;
 
 pub async fn http_insert_edge_v(
     State(state): State<Arc<AppState>>,
-    Json(edge_form_v): Json<Vec<edge::EdgeFrom>>,
+    Json(edge_form_v): Json<Vec<edge_service::EdgeFrom>>,
 ) -> (StatusCode, String) {
     match (|| async {
         let mut tr = state
@@ -25,7 +25,7 @@ pub async fn http_insert_edge_v(
             .await
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
         // insert_edge_v
-        let id_v = match edge::insert_edge_v(conn, &edge_form_v).await {
+        let id_v = match edge_service::insert_edge_v(conn, &edge_form_v).await {
             Ok(r) => r,
             Err(e) => {
                 let _ = tr.rollback().await;
@@ -49,5 +49,5 @@ pub async fn http_insert_edge_v(
 }
 
 pub async fn http_new_point() -> (StatusCode, String) {
-    (StatusCode::OK, edge::new_point())
+    (StatusCode::OK, edge_service::new_point())
 }

@@ -1,5 +1,6 @@
 use std::io::{self, Error, ErrorKind};
 
+use edge::Edge;
 use serde::Deserialize;
 use sqlx::{Acquire, MySqlConnection};
 
