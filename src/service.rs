@@ -18,7 +18,7 @@ pub struct EdgeFrom {
 }
 
 async fn __insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<String> {
-    let id = __new_point();
+    let id = new_point();
     sqlx::query("insert into edge_t (id,context,source,code,target) values (?,?,?,?,?)")
         .bind(&id)
         .bind(&edge_form.context)
@@ -31,11 +31,23 @@ async fn __insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::
     Ok(id)
 }
 
-fn __new_point() -> String {
+async fn insert_edge_v(
+    conn: &mut MySqlConnection,
+    edge_form_v: &Vec<EdgeFrom>,
+) -> io::Result<Vec<String>> {
+    let mut arr = Vec::new();
+    for edge_form in edge_form_v {
+        let id = __insert_edge(conn, edge_form).await?;
+        arr.push(id);
+    }
+    Ok(arr)
+}
+
+fn new_point() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-pub async fn insert_edge_v(
+pub async fn http_insert_edge_v(
     State(state): State<Arc<AppState>>,
     Json(edge_form_v): Json<Vec<EdgeFrom>>,
 ) -> (StatusCode, String) {
@@ -49,17 +61,14 @@ pub async fn insert_edge_v(
             .acquire()
             .await
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-        let mut id_v = Vec::new();
-        for edge_form in &edge_form_v {
-            match __insert_edge(conn, edge_form).await {
-                Ok(id) => id_v.push(id),
-                Err(e) => {
-                    let _ = tr.rollback().await;
-                    log::error!("{e}");
-                    return Err(e);
-                }
-            };
-        }
+        let id_v = match insert_edge_v(conn, &edge_form_v).await {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = tr.rollback().await;
+                log::error!("{e}");
+                return Err(e);
+            }
+        };
         if let Err(e) = tr.commit().await {
             log::error!("{e}");
             return Err(Error::new(ErrorKind::Other, e.to_string()));
@@ -73,8 +82,8 @@ pub async fn insert_edge_v(
     }
 }
 
-pub async fn new_point() -> (StatusCode, String) {
-    (StatusCode::OK, __new_point())
+pub async fn http_new_point() -> (StatusCode, String) {
+    (StatusCode::OK, new_point())
 }
 
 #[cfg(test)]
@@ -88,7 +97,7 @@ mod tests {
     use super::EdgeFrom;
 
     #[test]
-    fn insert_edge() {
+    fn insert_edge_v() {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -100,14 +109,14 @@ mod tests {
                 let pool: Pool<MySql> = sqlx::Pool::connect(&config.db_url).await.unwrap();
                 let mut tr = pool.begin().await.unwrap();
                 let conn = tr.acquire().await.unwrap();
-                let r = super::__insert_edge(
+                let r = super::insert_edge_v(
                     conn,
-                    &EdgeFrom {
+                    &vec![EdgeFrom {
                         context: String::new(),
                         source: String::new(),
                         code: String::new(),
                         target: String::new(),
-                    },
+                    }],
                 )
                 .await;
                 tr.rollback().await.unwrap();
@@ -122,8 +131,8 @@ mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                let id = super::__new_point();
-                let id1 = super::__new_point();
+                let id = super::new_point();
+                let id1 = super::new_point();
                 assert_ne!(id, id1);
             })
     }

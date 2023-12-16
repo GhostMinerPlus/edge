@@ -32,11 +32,11 @@ async fn main() -> io::Result<()> {
     let app = Router::new()
         .route(
             &format!("/{}/insert_edge_v", config.name),
-            post(service::insert_edge_v),
+            post(service::http_insert_edge_v),
         )
         .route(
             &format!("/{}/new_point", config.name),
-            post(service::new_point),
+            post(service::http_new_point),
         )
         .with_state(Arc::new(AppState {
             pool: sqlx::Pool::connect(&config.db_url)
