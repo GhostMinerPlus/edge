@@ -25,9 +25,37 @@ async fn __insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::
         .bind(&edge_form.source)
         .bind(&edge_form.code)
         .bind(&edge_form.target)
+        .execute(
+            conn.acquire()
+                .await
+                .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?,
+        )
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    Ok(id)
+}
+
+async fn __delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
+    log::info!("deleting edge:{id}");
+    sqlx::query("delete from edge_t where id = ?")
+        .bind(id)
         .execute(conn)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    Ok(())
+}
+
+async fn __insert_edge_and_react(
+    conn: &mut MySqlConnection,
+    edge_form: &EdgeFrom,
+) -> io::Result<String> {
+    // Insert edge
+    let id = __insert_edge(conn, edge_form).await?;
+    // React
+    match edge_form.code.as_str() {
+        "deleted" => __delete_edge(conn, &edge_form.target).await?,
+        _ => (),
+    }
     Ok(id)
 }
 
@@ -37,7 +65,7 @@ async fn insert_edge_v(
 ) -> io::Result<Vec<String>> {
     let mut arr = Vec::new();
     for edge_form in edge_form_v {
-        let id = __insert_edge(conn, edge_form).await?;
+        let id = __insert_edge_and_react(conn, edge_form).await?;
         arr.push(id);
     }
     Ok(arr)
@@ -88,7 +116,7 @@ pub async fn http_new_point() -> (StatusCode, String) {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, io};
 
     use sqlx::{Acquire, MySql, Pool};
 
@@ -96,8 +124,15 @@ mod tests {
 
     use super::EdgeFrom;
 
+    fn init() {
+        let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("INFO"))
+            .is_test(true)
+            .try_init();
+    }
+
     #[test]
     fn insert_edge_v() {
+        init();
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -109,16 +144,32 @@ mod tests {
                 let pool: Pool<MySql> = sqlx::Pool::connect(&config.db_url).await.unwrap();
                 let mut tr = pool.begin().await.unwrap();
                 let conn = tr.acquire().await.unwrap();
-                let r = super::insert_edge_v(
-                    conn,
-                    &vec![EdgeFrom {
-                        context: String::new(),
-                        source: String::new(),
-                        code: String::new(),
-                        target: String::new(),
-                    }],
-                )
+
+                let r: io::Result<()> = (|| async move {
+                    let id_v = super::insert_edge_v(
+                        conn,
+                        &vec![EdgeFrom {
+                            context: String::new(),
+                            source: String::new(),
+                            code: String::new(),
+                            target: String::new(),
+                        }],
+                    )
+                    .await?;
+                    super::insert_edge_v(
+                        conn,
+                        &vec![EdgeFrom {
+                            context: String::new(),
+                            source: String::new(),
+                            code: "deleted".to_string(),
+                            target: id_v[0].clone(),
+                        }],
+                    )
+                    .await?;
+                    Ok(())
+                })()
                 .await;
+
                 tr.rollback().await.unwrap();
                 r.unwrap();
             });
@@ -126,6 +177,7 @@ mod tests {
 
     #[test]
     fn test_new_point() {
+        init();
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
