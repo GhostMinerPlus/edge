@@ -12,7 +12,9 @@ pub struct EdgeFrom {
 }
 
 async fn insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<String> {
+    // new id
     let id = new_point();
+    // insert
     sqlx::query("insert into edge_t (id,context,source,code,target) values (?,?,?,?,?)")
         .bind(&id)
         .bind(&edge_form.context)
@@ -31,6 +33,7 @@ async fn insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Re
 
 async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
     log::info!("deleting edge:{id}");
+    // delete
     sqlx::query("delete from edge_t where id = ?")
         .bind(id)
         .execute(conn)

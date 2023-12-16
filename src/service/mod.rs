@@ -24,6 +24,7 @@ pub async fn http_insert_edge_v(
             .acquire()
             .await
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        // insert_edge_v
         let id_v = match edge::insert_edge_v(conn, &edge_form_v).await {
             Ok(r) => r,
             Err(e) => {
@@ -32,10 +33,12 @@ pub async fn http_insert_edge_v(
                 return Err(e);
             }
         };
+        // commit
         if let Err(e) = tr.commit().await {
             log::error!("{e}");
             return Err(Error::new(ErrorKind::Other, e.to_string()));
         }
+        // json
         serde_json::to_string(&id_v).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
     })()
     .await
