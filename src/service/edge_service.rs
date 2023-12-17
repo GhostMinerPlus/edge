@@ -65,13 +65,16 @@ async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
     Ok(())
 }
 
-async fn react(conn: &mut MySqlConnection, edge: &Edge) -> io::Result<()> {
-    let listener_v = get_target_by_code(conn, &edge.context, &edge.code, "listener").await?;
-
-    for listener in &listener_v {
-        match listener.as_str() {
+#[async_recursion::async_recursion]
+async fn act(conn: &mut MySqlConnection, edge: &Edge, action_v: &Vec<String>) -> io::Result<()> {
+    for action in action_v {
+        let code_v = get_target_by_code(conn, &edge.context, action, "code").await?;
+        if code_v.len() != 1 {
+            return Err(Error::new(ErrorKind::Other, ""));
+        }
+        match code_v[0].as_str() {
             "delete" => {
-                insert_edge_and_react(
+                insert_edge_and_act(
                     conn,
                     &EdgeFrom {
                         context: edge.context.clone(),
@@ -84,16 +87,15 @@ async fn react(conn: &mut MySqlConnection, edge: &Edge) -> io::Result<()> {
             }
             _ => (),
         }
+        let next_action_v = get_target_by_code(conn, &edge.context, action, "next").await?;
+        act(conn, edge, &next_action_v).await?;
     }
 
     Ok(())
 }
 
 #[async_recursion::async_recursion]
-async fn insert_edge_and_react(
-    conn: &mut MySqlConnection,
-    edge_form: &EdgeFrom,
-) -> io::Result<Edge> {
+async fn insert_edge_and_act(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<Edge> {
     // Insert edge
     let edge = insert_edge(conn, edge_form).await?;
     // Execute
@@ -101,8 +103,9 @@ async fn insert_edge_and_react(
         "deleted" => delete_edge(conn, &edge.target).await?,
         _ => (),
     }
-    // React
-    react(conn, &edge).await?;
+    // Act
+    let action_v = get_target_by_code(conn, &edge.context, &edge.code, "action").await?;
+    act(conn, &edge, &action_v).await?;
     Ok(edge)
 }
 
@@ -112,7 +115,7 @@ pub async fn insert_edge_v(
 ) -> io::Result<Vec<Edge>> {
     let mut arr = Vec::new();
     for edge_form in edge_form_v {
-        let edge = insert_edge_and_react(conn, edge_form).await?;
+        let edge = insert_edge_and_act(conn, edge_form).await?;
         arr.push(edge);
     }
     Ok(arr)
