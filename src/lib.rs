@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct Edge {
-    id: String,
-    context: String,
-    source: String,
-    code: String,
-    target: String,
+    pub id: String,
+    pub context: String,
+    pub source: String,
+    pub code: String,
+    pub target: String,
 }

@@ -2,7 +2,7 @@ use std::io::{self, Error, ErrorKind};
 
 use edge::Edge;
 use serde::Deserialize;
-use sqlx::{Acquire, MySqlConnection};
+use sqlx::{MySqlConnection, Row};
 
 #[derive(Deserialize)]
 pub struct EdgeFrom {
@@ -12,59 +12,105 @@ pub struct EdgeFrom {
     target: String,
 }
 
-async fn insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<String> {
-    // new id
-    let id = new_point();
+async fn insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<Edge> {
+    // new edge
+    let edge = Edge {
+        id: new_point(),
+        context: edge_form.context.clone(),
+        source: edge_form.source.clone(),
+        code: edge_form.code.clone(),
+        target: edge_form.target.clone(),
+    };
     // insert
     sqlx::query("insert into edge_t (id,context,source,code,target) values (?,?,?,?,?)")
-        .bind(&id)
-        .bind(&edge_form.context)
-        .bind(&edge_form.source)
-        .bind(&edge_form.code)
-        .bind(&edge_form.target)
-        .execute(
-            conn.acquire()
-                .await
-                .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?,
-        )
+        .bind(&edge.id)
+        .bind(&edge.context)
+        .bind(&edge.source)
+        .bind(&edge.code)
+        .bind(&edge.target)
+        .execute(conn)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-    Ok(id)
+    Ok(edge)
+}
+
+async fn get_by_code(
+    conn: &mut MySqlConnection,
+    context: &str,
+    source: &str,
+    code: &str,
+) -> io::Result<Vec<String>> {
+    let rs = sqlx::query("select target from edge_t where context=? and source=? and code=?")
+        .bind(context)
+        .bind(source)
+        .bind(code)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    let mut arr = Vec::new();
+    for row in rs {
+        arr.push(row.get(0))
+    }
+    Ok(arr)
 }
 
 async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
-    log::info!("deleting edge:{id}");
-    // delete
-    sqlx::query("delete from edge_t where id = ?")
+    sqlx::query("delete from edge_t where id=?")
         .bind(id)
-        .execute(conn)
+        .fetch_all(conn)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     Ok(())
 }
 
+async fn react(conn: &mut MySqlConnection, edge: &Edge) -> io::Result<()> {
+    let listener_v = get_by_code(conn, &edge.context, &edge.code, "listener").await?;
+
+    for listener in &listener_v {
+        match listener.as_str() {
+            "delete" => {
+                insert_edge_and_react(
+                    conn,
+                    &EdgeFrom {
+                        context: edge.context.clone(),
+                        source: edge.source.clone(),
+                        code: "deleted".to_string(),
+                        target: edge.target.clone(),
+                    },
+                ).await?;
+            }
+            _ => (),
+        }
+    }
+
+    Ok(())
+}
+
+#[async_recursion::async_recursion]
 async fn insert_edge_and_react(
     conn: &mut MySqlConnection,
     edge_form: &EdgeFrom,
-) -> io::Result<String> {
+) -> io::Result<Edge> {
     // Insert edge
-    let id = insert_edge(conn, edge_form).await?;
-    // React
-    match edge_form.code.as_str() {
-        "deleted" => delete_edge(conn, &edge_form.target).await?,
-        _ => (),
+    let edge = insert_edge(conn, edge_form).await?;
+    // Execute
+    match edge.code.as_str() {
+        "deleted" => delete_edge(conn, &edge.target).await?,
+        _ => ()
     }
-    Ok(id)
+    // React
+    react(conn, &edge).await?;
+    Ok(edge)
 }
 
 pub async fn insert_edge_v(
     conn: &mut MySqlConnection,
     edge_form_v: &Vec<EdgeFrom>,
-) -> io::Result<Vec<String>> {
+) -> io::Result<Vec<Edge>> {
     let mut arr = Vec::new();
     for edge_form in edge_form_v {
-        let id = insert_edge_and_react(conn, edge_form).await?;
-        arr.push(id);
+        let edge = insert_edge_and_react(conn, edge_form).await?;
+        arr.push(edge);
     }
     Ok(arr)
 }
@@ -101,7 +147,7 @@ mod tests {
             let conn = tr.acquire().await.unwrap();
 
             let r: io::Result<()> = (|| async move {
-                let id_v = super::insert_edge_v(
+                let edge_v = super::insert_edge_v(
                     conn,
                     &vec![EdgeFrom {
                         context: String::new(),
@@ -117,7 +163,7 @@ mod tests {
                         context: String::new(),
                         source: String::new(),
                         code: "deleted".to_string(),
-                        target: id_v[0].clone(),
+                        target: edge_v[0].id.clone(),
                     }],
                 )
                 .await?;
