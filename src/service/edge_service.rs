@@ -5,14 +5,14 @@ use serde::Deserialize;
 use sqlx::{MySqlConnection, Row};
 
 #[derive(Deserialize)]
-pub struct EdgeFrom {
+pub struct EdgeForm {
     context: String,
     source: String,
     code: String,
     target: String,
 }
 
-async fn insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<Edge> {
+async fn insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeForm) -> io::Result<Edge> {
     // new edge
     let edge = Edge {
         id: new_point(),
@@ -66,7 +66,11 @@ async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
 }
 
 #[async_recursion::async_recursion]
-async fn act(conn: &mut MySqlConnection, edge: &Edge, action_v: &Vec<String>) -> io::Result<()> {
+async fn act(
+    conn: &mut MySqlConnection,
+    edge: &EdgeForm,
+    action_v: &Vec<String>,
+) -> io::Result<()> {
     for action in action_v {
         let code_v = get_target_by_code(conn, &edge.context, action, "code").await?;
         if code_v.len() != 1 {
@@ -84,22 +88,22 @@ async fn act(conn: &mut MySqlConnection, edge: &Edge, action_v: &Vec<String>) ->
 }
 
 #[async_recursion::async_recursion]
-async fn insert_edge_and_act(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<Edge> {
+async fn act_and_insert(conn: &mut MySqlConnection, edge_form: &EdgeForm) -> io::Result<Edge> {
+    // Take action
+    let action_v = get_target_by_code(conn, &edge_form.context, &edge_form.code, "action").await?;
+    act(conn, &edge_form, &action_v).await?;
     // Insert edge
     let edge = insert_edge(conn, edge_form).await?;
-    // Act
-    let action_v = get_target_by_code(conn, &edge.context, &edge.code, "action").await?;
-    act(conn, &edge, &action_v).await?;
     Ok(edge)
 }
 
 pub async fn insert_edge_v(
     conn: &mut MySqlConnection,
-    edge_form_v: &Vec<EdgeFrom>,
+    edge_form_v: &Vec<EdgeForm>,
 ) -> io::Result<Vec<Edge>> {
     let mut arr = Vec::new();
     for edge_form in edge_form_v {
-        let edge = insert_edge_and_act(conn, edge_form).await?;
+        let edge = act_and_insert(conn, edge_form).await?;
         arr.push(edge);
     }
     Ok(arr)
@@ -117,7 +121,7 @@ mod tests {
 
     use crate::Config;
 
-    use super::EdgeFrom;
+    use super::EdgeForm;
 
     fn init() {
         let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("INFO"))
@@ -139,7 +143,7 @@ mod tests {
             let r: io::Result<()> = (|| async move {
                 let edge_v = super::insert_edge_v(
                     conn,
-                    &vec![EdgeFrom {
+                    &vec![EdgeForm {
                         context: String::new(),
                         source: String::new(),
                         code: String::new(),
@@ -149,7 +153,7 @@ mod tests {
                 .await?;
                 super::insert_edge_v(
                     conn,
-                    &vec![EdgeFrom {
+                    &vec![EdgeForm {
                         context: String::new(),
                         source: String::new(),
                         code: "deleted".to_string(),

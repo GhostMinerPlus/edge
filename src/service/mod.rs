@@ -12,7 +12,7 @@ use crate::AppState;
 
 pub async fn http_insert_edge_v(
     State(state): State<Arc<AppState>>,
-    Json(edge_form_v): Json<Vec<edge_service::EdgeFrom>>,
+    Json(edge_form_v): Json<Vec<edge_service::EdgeForm>>,
 ) -> (StatusCode, String) {
     match (|| async {
         let mut tr = state
