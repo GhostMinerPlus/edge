@@ -34,7 +34,7 @@ async fn insert_edge(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Re
     Ok(edge)
 }
 
-async fn get_by_code(
+async fn get_target_by_code(
     conn: &mut MySqlConnection,
     context: &str,
     source: &str,
@@ -55,6 +55,8 @@ async fn get_by_code(
 }
 
 async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
+    log::info!("deleting edge:{id}");
+
     sqlx::query("delete from edge_t where id=?")
         .bind(id)
         .fetch_all(conn)
@@ -64,7 +66,7 @@ async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
 }
 
 async fn react(conn: &mut MySqlConnection, edge: &Edge) -> io::Result<()> {
-    let listener_v = get_by_code(conn, &edge.context, &edge.code, "listener").await?;
+    let listener_v = get_target_by_code(conn, &edge.context, &edge.code, "listener").await?;
 
     for listener in &listener_v {
         match listener.as_str() {
@@ -77,7 +79,8 @@ async fn react(conn: &mut MySqlConnection, edge: &Edge) -> io::Result<()> {
                         code: "deleted".to_string(),
                         target: edge.target.clone(),
                     },
-                ).await?;
+                )
+                .await?;
             }
             _ => (),
         }
@@ -96,7 +99,7 @@ async fn insert_edge_and_react(
     // Execute
     match edge.code.as_str() {
         "deleted" => delete_edge(conn, &edge.target).await?,
-        _ => ()
+        _ => (),
     }
     // React
     react(conn, &edge).await?;
