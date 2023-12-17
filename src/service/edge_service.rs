@@ -73,18 +73,7 @@ async fn act(conn: &mut MySqlConnection, edge: &Edge, action_v: &Vec<String>) ->
             return Err(Error::new(ErrorKind::Other, ""));
         }
         match code_v[0].as_str() {
-            "delete" => {
-                insert_edge_and_act(
-                    conn,
-                    &EdgeFrom {
-                        context: edge.context.clone(),
-                        source: edge.source.clone(),
-                        code: "deleted".to_string(),
-                        target: edge.target.clone(),
-                    },
-                )
-                .await?;
-            }
+            "deleted" => delete_edge(conn, &edge.target).await?,
             _ => (),
         }
         let next_action_v = get_target_by_code(conn, &edge.context, action, "next").await?;
@@ -98,11 +87,6 @@ async fn act(conn: &mut MySqlConnection, edge: &Edge, action_v: &Vec<String>) ->
 async fn insert_edge_and_act(conn: &mut MySqlConnection, edge_form: &EdgeFrom) -> io::Result<Edge> {
     // Insert edge
     let edge = insert_edge(conn, edge_form).await?;
-    // Execute
-    match edge.code.as_str() {
-        "deleted" => delete_edge(conn, &edge.target).await?,
-        _ => (),
-    }
     // Act
     let action_v = get_target_by_code(conn, &edge.context, &edge.code, "action").await?;
     act(conn, &edge, &action_v).await?;
