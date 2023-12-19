@@ -168,6 +168,16 @@ pub async fn execute(
     inc_v: &Vec<Inc>,
 ) -> io::Result<BTreeMap<String, String>> {
     let ctx = new_point();
+    insert_edge(
+        conn,
+        &EdgeForm {
+            context: "".to_string(),
+            source: ctx.clone(),
+            code: "class".to_string(),
+            target: "context".to_string(),
+        },
+    )
+    .await?;
     return invoke_inc_v(conn, &ctx, inc_v).await;
 }
 

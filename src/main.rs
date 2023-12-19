@@ -31,7 +31,7 @@ async fn main() -> io::Result<()> {
     // build our application with a route
     let app = Router::new()
         .route(
-            &format!("/{}/http_execute", config.name),
+            &format!("/{}/execute", config.name),
             post(service::http_execute),
         )
         .route(
