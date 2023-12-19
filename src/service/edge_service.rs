@@ -165,13 +165,14 @@ async fn invoke_inc_v(
 
 pub async fn execute(
     conn: &mut MySqlConnection,
+    p_ctx: &str,
     inc_v: &Vec<Inc>,
 ) -> io::Result<BTreeMap<String, String>> {
     let ctx = new_point();
     insert_edge(
         conn,
         &EdgeForm {
-            context: "".to_string(),
+            context: p_ctx.to_string(),
             source: ctx.clone(),
             code: "class".to_string(),
             target: "context".to_string(),
@@ -207,6 +208,7 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             super::execute(
                 &mut conn,
+                "",
                 &serde_json::from_str(
                     r#"[
     {
