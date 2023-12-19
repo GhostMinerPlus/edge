@@ -10,9 +10,15 @@ use sqlx::Acquire;
 
 use crate::AppState;
 
-pub async fn http_insert_edge_v(
+use self::edge_service::Inc;
+
+pub async fn http_new_point() -> (StatusCode, String) {
+    (StatusCode::OK, edge_service::new_point())
+}
+
+pub async fn http_execute(
     State(state): State<Arc<AppState>>,
-    Json(edge_form_v): Json<Vec<edge_service::EdgeForm>>,
+    Json(inc_v): Json<Vec<Inc>>,
 ) -> (StatusCode, String) {
     match (|| async {
         let mut tr = state
@@ -24,8 +30,8 @@ pub async fn http_insert_edge_v(
             .acquire()
             .await
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-        // insert_edge_v
-        let id_v = match edge_service::insert_edge_v(conn, &edge_form_v).await {
+        // Execute
+        let r = match edge_service::execute(conn, &inc_v).await {
             Ok(r) => r,
             Err(e) => {
                 let _ = tr.rollback().await;
@@ -39,15 +45,11 @@ pub async fn http_insert_edge_v(
             return Err(Error::new(ErrorKind::Other, e.to_string()));
         }
         // json
-        serde_json::to_string(&id_v).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+        Ok(json::from(r).dump())
     })()
     .await
     {
         Ok(r) => (StatusCode::OK, r),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
-}
-
-pub async fn http_new_point() -> (StatusCode, String) {
-    (StatusCode::OK, edge_service::new_point())
 }

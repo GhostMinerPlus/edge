@@ -31,8 +31,8 @@ async fn main() -> io::Result<()> {
     // build our application with a route
     let app = Router::new()
         .route(
-            &format!("/{}/insert_edge_v", config.name),
-            post(service::http_insert_edge_v),
+            &format!("/{}/http_execute", config.name),
+            post(service::http_execute),
         )
         .route(
             &format!("/{}/new_point", config.name),
