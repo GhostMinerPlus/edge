@@ -7,4 +7,5 @@ pub struct Edge {
     pub source: String,
     pub code: String,
     pub target: String,
+    pub no: u64,
 }
