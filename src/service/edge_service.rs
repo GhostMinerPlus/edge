@@ -74,6 +74,28 @@ async fn get_target(
     Ok(row.get(0))
 }
 
+async fn get_target_v(
+    conn: &mut MySqlConnection,
+    context: &str,
+    source: &str,
+    code: &str,
+) -> io::Result<Vec<String>> {
+    let row_v = sqlx::query(
+        "select target from edge_t where context=? and source=? and code=? order by no",
+    )
+    .bind(context)
+    .bind(source)
+    .bind(code)
+    .fetch_all(conn)
+    .await
+    .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    let mut arr = Vec::new();
+    for row in row_v {
+        arr.push(row.get(0));
+    }
+    Ok(arr)
+}
+
 async fn get_source(
     conn: &mut MySqlConnection,
     context: &str,
@@ -191,7 +213,20 @@ async fn invoke_inc(
             set(conn, ctx, root, &inc.output, &edge.id).await?;
         }
         _ => {
-            todo!("");
+            let f_h = get_target(conn, ctx, "root", "fn").await?;
+            let inc_h_v = get_target_v(conn, ctx, &f_h, &inc.code).await?;
+            let mut inc_v = Vec::new();
+            for inc_h in &inc_h_v {
+                let code = get_target(conn, ctx, inc_h, "code").await?;
+                let input = get_target(conn, ctx, inc_h, "input").await?;
+                let output = get_target(conn, ctx, inc_h, "output").await?;
+                inc_v.push(Inc {
+                    code,
+                    input,
+                    output,
+                });
+            }
+            invoke_inc_v(conn, ctx, stack, root, &inc_v).await?;
         }
     }
     Ok(())
@@ -226,8 +261,11 @@ async fn invoke_inc_v(
     Ok(String::new())
 }
 
-pub async fn execute(conn: &mut MySqlConnection, inc_v: &Vec<Inc>) -> io::Result<String> {
-    let ctx = new_point();
+pub async fn execute(
+    conn: &mut MySqlConnection,
+    ctx: &str,
+    inc_v: &Vec<Inc>,
+) -> io::Result<String> {
     let mut stack = Vec::new();
     let mut root = "root".to_string();
     invoke_inc_v(conn, &ctx, &mut stack, &mut root, inc_v).await
@@ -257,46 +295,53 @@ mod tests {
 
             let mut tr = pool.begin().await.unwrap();
             let mut conn = tr.acquire().await.unwrap();
-            super::execute(
+            let r = super::execute(
                 &mut conn,
+                "",
                 &serde_json::from_str(
                     r#"[
     {
         "code": "push",
-        "data": "edge",
+        "input": "edge",
         "output": ""
     },
     {
         "code": "set",
-        "data": "xxx",
+        "input": "xxx",
         "output": "source"
     },
     {
         "code": "set",
-        "data": "xxx",
+        "input": "xxx",
         "output": "code"
     },
     {
         "code": "set",
-        "data": "xxx",
+        "input": "xxx",
         "output": "target"
     },
     {
         "code": "pop",
-        "data": "insert",
+        "input": "insert",
         "output": "edge"
     },
     {
         "code": "delete",
-        "data": "edge",
+        "input": "edge",
+        "output": ""
+    },
+    {
+        "code": "return",
+        "input": "@edge",
         "output": ""
     }
 ]"#,
                 )
                 .unwrap(),
             )
-            .await
-            .unwrap();
+            .await;
+            tr.rollback().await.unwrap();
+            assert!(!r.unwrap().is_empty());
         };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
