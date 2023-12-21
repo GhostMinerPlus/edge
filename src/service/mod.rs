@@ -5,12 +5,10 @@ use std::{
     sync::Arc,
 };
 
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, http::StatusCode};
 use sqlx::Acquire;
 
 use crate::AppState;
-
-use self::edge_service::Inc;
 
 pub async fn http_new_point() -> (StatusCode, String) {
     (StatusCode::OK, edge_service::new_point())
@@ -18,7 +16,7 @@ pub async fn http_new_point() -> (StatusCode, String) {
 
 pub async fn http_execute(
     State(state): State<Arc<AppState>>,
-    Json(inc_v): Json<Vec<Inc>>,
+    inc_v: String,
 ) -> (StatusCode, String) {
     match (|| async {
         let mut tr = state
@@ -31,7 +29,7 @@ pub async fn http_execute(
             .await
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
         // Execute
-        let r = match edge_service::execute(conn, "", &inc_v).await {
+        let r = match edge_service::execute(conn, &inc_v).await {
             Ok(r) => r,
             Err(e) => {
                 let _ = tr.rollback().await;
