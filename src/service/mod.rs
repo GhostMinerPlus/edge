@@ -10,10 +10,6 @@ use sqlx::Acquire;
 
 use crate::AppState;
 
-pub async fn http_new_point() -> (StatusCode, String) {
-    (StatusCode::OK, edge_service::new_point())
-}
-
 pub async fn http_execute(
     State(state): State<Arc<AppState>>,
     inc_v: String,

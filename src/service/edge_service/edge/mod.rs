@@ -3,7 +3,7 @@ mod inc;
 use sqlx::MySqlConnection;
 use std::io;
 
-pub use inc::{new_point, Inc};
+pub use inc::Inc;
 
 pub async fn invoke_inc_v(
     conn: &mut MySqlConnection,

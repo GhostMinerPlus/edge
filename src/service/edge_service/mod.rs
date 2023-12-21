@@ -4,8 +4,6 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-pub use self::edge::new_point;
-
 pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<String> {
     let mut root = "root".to_string();
     let mut inc_v = Vec::new();
@@ -63,21 +61,6 @@ return ->id"#,
             .await;
             tr.rollback().await.unwrap();
             assert!(!r.unwrap().is_empty());
-        };
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(f)
-    }
-
-    #[test]
-    fn test_new_point() {
-        init();
-        let f = async {
-            let id = super::new_point();
-            let id1 = super::new_point();
-            assert_ne!(id, id1);
         };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

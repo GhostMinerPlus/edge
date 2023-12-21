@@ -34,10 +34,6 @@ async fn main() -> io::Result<()> {
             &format!("/{}/execute", config.name),
             post(service::http_execute),
         )
-        .route(
-            &format!("/{}/new_point", config.name),
-            post(service::http_new_point),
-        )
         .with_state(Arc::new(AppState {
             pool: sqlx::Pool::connect(&config.db_url)
                 .await
