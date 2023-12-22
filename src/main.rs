@@ -1,5 +1,4 @@
 mod service;
-mod util;
 
 use std::{
     fs,

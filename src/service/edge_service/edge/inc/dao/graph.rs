@@ -32,15 +32,15 @@ mod raw {
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
         Ok(())
     }
+
+    pub fn new_point() -> String {
+        uuid::Uuid::new_v4().to_string()
+    }
 }
 
 use std::io::{self, Error, ErrorKind};
 
 use sqlx::{MySqlConnection, Row};
-
-pub fn new_point() -> String {
-    uuid::Uuid::new_v4().to_string()
-}
 
 #[async_recursion::async_recursion]
 pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
@@ -97,7 +97,7 @@ pub async fn insert_edge(
 ) -> io::Result<String> {
     log::debug!("insert_edge: {source}->{code}={target}");
 
-    let id = new_point();
+    let id = raw::new_point();
     sqlx::query("insert into edge_t (id,source,code,target) values (?,?,?,?)")
         .bind(&id)
         .bind(&source)
@@ -136,7 +136,7 @@ pub async fn get_target_anyway(
     match get_target(conn, source, code).await {
         Ok(target) => Ok(target),
         Err(_) => {
-            let target = new_point();
+            let target = raw::new_point();
             insert_edge(conn, source, code, &target).await?;
             Ok(target)
         }
@@ -151,7 +151,7 @@ pub async fn get_source_anyway(
     match raw::get_source(conn, code, target).await {
         Ok(source) => Ok(source),
         Err(_) => {
-            let source = new_point();
+            let source = raw::new_point();
             insert_edge(conn, &source, code, target).await?;
             Ok(source)
         }

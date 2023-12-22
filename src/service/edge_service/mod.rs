@@ -5,7 +5,7 @@ use std::io;
 use sqlx::MySqlConnection;
 
 pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<String> {
-    let root = edge::new_point();
+    let mut root = "root".to_string();
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {
@@ -21,7 +21,7 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
             output: word_v[2].to_string(),
         });
     }
-    edge::invoke_inc_v(conn, &mut root.clone(), &inc_v).await
+    edge::invoke_inc_v(conn, &mut root, &inc_v).await
 }
 
 #[cfg(test)]
