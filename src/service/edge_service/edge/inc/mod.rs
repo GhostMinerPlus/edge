@@ -5,6 +5,8 @@ use std::io;
 use serde::Deserialize;
 use sqlx::MySqlConnection;
 
+pub use dao::new_point;
+
 #[derive(Clone, Deserialize)]
 pub struct Inc {
     pub code: String,
