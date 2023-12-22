@@ -44,12 +44,37 @@ pub fn new_point() -> String {
 
 #[async_recursion::async_recursion]
 pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
-    let arrow = &path[0..2];
-    let path = &path[2..];
+    if path.starts_with("->") || path.starts_with("<-") {
+        let (arrow, path) = (&path[0..2], &path[2..]);
+        let _v = path.find("->");
+        let v_ = path.find("<-");
+        if _v.is_some() || v_.is_some() {
+            let pos = if _v.is_some() && v_.is_some() {
+                std::cmp::min(_v.unwrap(), v_.unwrap())
+            } else if _v.is_some() {
+                _v.unwrap()
+            } else {
+                v_.unwrap()
+            };
+            let code = &path[0..pos];
+            let path = &path[pos + 2..];
 
-    let _v = path.find("->");
-    let v_ = path.find("<-");
-    if _v.is_some() || v_.is_some() {
+            let pt = if arrow == "->" {
+                get_target_anyway(conn, root, code).await?
+            } else {
+                get_source_anyway(conn, code, root).await?
+            };
+            get(conn, &pt, path).await
+        } else {
+            if arrow == "->" {
+                get_target_anyway(conn, root, path).await
+            } else {
+                get_source_anyway(conn, path, root).await
+            }
+        }
+    } else {
+        let _v = path.find("->");
+        let v_ = path.find("<-");
         let pos = if _v.is_some() && v_.is_some() {
             std::cmp::min(_v.unwrap(), v_.unwrap())
         } else if _v.is_some() {
@@ -57,21 +82,10 @@ pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Resu
         } else {
             v_.unwrap()
         };
-        let code = &path[0..pos];
-        let path = &path[pos + 2..];
+        let root = &path[0..pos];
+        let path = &path[pos..];
 
-        let pt = if arrow == "->" {
-            get_target_anyway(conn, root, code).await?
-        } else {
-            get_source_anyway(conn, code, root).await?
-        };
-        get(conn, &pt, path).await
-    } else {
-        if arrow == "->" {
-            get_target_anyway(conn, root, path).await
-        } else {
-            get_source_anyway(conn, path, root).await
-        }
+        get(conn, root, path).await
     }
 }
 
@@ -122,7 +136,7 @@ pub async fn get_target_anyway(
     match get_target(conn, source, code).await {
         Ok(target) => Ok(target),
         Err(_) => {
-            let target =new_point();
+            let target = new_point();
             insert_edge(conn, source, code, &target).await?;
             Ok(target)
         }

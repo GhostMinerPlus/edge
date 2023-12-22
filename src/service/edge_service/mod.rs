@@ -21,8 +21,7 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
             output: word_v[2].to_string(),
         });
     }
-    edge::invoke_inc_v(conn, &mut root.clone(), &inc_v).await?;
-    return Ok(root);
+    edge::invoke_inc_v(conn, &mut root.clone(), &inc_v).await
 }
 
 #[cfg(test)]
@@ -52,12 +51,12 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#"set xxx "->edge->source"
-set xxx "->edge->code"
-set xxx "->edge->target"
-insert ->edge "->id"
-delete ->id
-return ->id"#,
+                r#"set xxx "edge->source"
+set xxx "edge->code"
+set xxx "edge->target"
+insert edge "edge->id"
+delete edge->id
+return edge->id"#,
             )
             .await;
             tr.rollback().await.unwrap();
