@@ -4,6 +4,33 @@ use serde::Deserialize;
 use sqlx::MySqlConnection;
 use std::io;
 
+async fn invoke_script(
+    conn: &mut MySqlConnection,
+    root: &mut String,
+    mut inc_v_h: String,
+) -> io::Result<String> {
+    let mut inc_v = Vec::new();
+    loop {
+        inc_v_h = match inc::get_target(conn, &inc_v_h, "next").await {
+            Ok(r) => r,
+            Err(_) => break,
+        };
+        let code = inc::get_target(conn, &inc_v_h, "code").await?;
+        let input = inc::get_target(conn, &inc_v_h, "input").await?;
+        let output = inc::get_target(conn, &inc_v_h, "output").await?;
+        inc_v.push(Inc {
+            code,
+            input,
+            output,
+        });
+    }
+    if inc_v.is_empty() {
+        Ok(inc_v_h)
+    } else {
+        invoke_inc_v(conn, root, &inc_v).await
+    }
+}
+
 #[derive(Clone, Deserialize)]
 pub struct Inc {
     pub code: String,
@@ -31,24 +58,27 @@ pub async fn invoke_inc(
             let id = inc::insert_edge(conn, &source, &code, &target).await?;
             inc::set(conn, root, &inc.output, &id).await?;
         }
-        _ => {
-            let mut inc_v_h = inc.code.clone();
-            let mut inc_v = Vec::new();
-            loop {
-                inc_v_h = match inc::get_target(conn, &inc_v_h, "next").await {
-                    Ok(r) => r,
-                    Err(_) => break,
-                };
-                let code = inc::get_target(conn, &inc_v_h, "code").await?;
-                let input = inc::get_target(conn, &inc_v_h, "input").await?;
-                let output = inc::get_target(conn, &inc_v_h, "output").await?;
-                inc_v.push(Inc {
-                    code,
-                    input,
-                    output,
-                });
+        "if" => {
+            let condition = inc::get_target(conn, &inc.input, "condition").await?;
+            let script = if invoke_script(conn, root, condition).await? == "true" {
+                inc::get_target(conn, &inc.input, "then").await?
+            } else {
+                inc::get_target(conn, &inc.input, "else").await?
+            };
+            let r = invoke_script(conn, root, script).await?;
+            inc::set(conn, root, &inc.output, &r).await?;
+        }
+        "while" => {
+            let condition = inc::get_target(conn, &inc.input, "condition").await?;
+            let script = inc::get_target(conn, &inc.input, "then").await?;
+            let mut r = String::new();
+            while invoke_script(conn, root, condition.clone()).await? == "true" {
+                r = invoke_script(conn, root, script.clone()).await?;
             }
-            let r = invoke_inc_v(conn, &mut inc.input.clone(), &inc_v).await?;
+            inc::set(conn, root, &inc.output, &r).await?;
+        }
+        _ => {
+            let r = invoke_script(conn, &mut inc.input.clone(), inc.code.clone()).await?;
             inc::set(conn, root, &inc.output, &r).await?;
         }
     }
