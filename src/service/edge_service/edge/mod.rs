@@ -1,8 +1,8 @@
 mod inc;
 
+use serde::Deserialize;
 use sqlx::MySqlConnection;
 use std::io;
-use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
 pub struct Inc {
@@ -48,7 +48,7 @@ pub async fn invoke_inc(
                     output,
                 });
             }
-            let r = invoke_inc_v(conn, root, &inc_v).await?;
+            let r = invoke_inc_v(conn, &mut inc.input.clone(), &inc_v).await?;
             inc::set(conn, root, &inc.output, &r).await?;
         }
     }
