@@ -2,7 +2,7 @@ mod inc;
 
 use serde::Deserialize;
 use sqlx::MySqlConnection;
-use std::{cmp::Ordering, io};
+use std::io;
 
 async fn invoke_script(
     conn: &mut MySqlConnection,
