@@ -2,7 +2,7 @@ mod inc;
 
 use serde::Deserialize;
 use sqlx::MySqlConnection;
-use std::io;
+use std::{cmp::Ordering, io};
 
 async fn invoke_script(
     conn: &mut MySqlConnection,
@@ -43,7 +43,7 @@ pub async fn invoke_inc(
     conn: &mut MySqlConnection,
     root: &mut String,
     inc: &Inc,
-) -> io::Result<()> {
+) -> io::Result<i32> {
     match inc.code.as_str() {
         "set" => {
             inc::set(conn, &root, &inc.output, &inc.input).await?;
@@ -58,31 +58,100 @@ pub async fn invoke_inc(
             let id = inc::insert_edge(conn, &source, &code, &target).await?;
             inc::set(conn, root, &inc.output, &id).await?;
         }
-        "if" => {
-            let condition = inc::get_target(conn, &inc.input, "condition").await?;
-            let script = if invoke_script(conn, root, condition).await? == "true" {
-                inc::get_target(conn, &inc.input, "then").await?
+        "cmp" => {
+            let left: f64 = inc::get_target(conn, &inc.input, "left")
+                .await?
+                .parse()
+                .unwrap();
+            let right: f64 = inc::get_target(conn, &inc.input, "right")
+                .await?
+                .parse()
+                .unwrap();
+
+            let r = if left < right {
+                "-1"
+            } else if left > right {
+                "1"
             } else {
-                inc::get_target(conn, &inc.input, "else").await?
+                "0"
             };
-            let r = invoke_script(conn, root, script).await?;
-            inc::set(conn, root, &inc.output, &r).await?;
+            inc::set(conn, root, &inc.output, r).await?;
         }
-        "while" => {
-            let condition = inc::get_target(conn, &inc.input, "condition").await?;
-            let script = inc::get_target(conn, &inc.input, "then").await?;
-            let mut r = String::new();
-            while invoke_script(conn, root, condition.clone()).await? == "true" {
-                r = invoke_script(conn, root, script.clone()).await?;
-            }
-            inc::set(conn, root, &inc.output, &r).await?;
+        "add" => {
+            let left: f64 = inc::get_target(conn, &inc.input, "left")
+                .await?
+                .parse()
+                .unwrap();
+            let right: f64 = inc::get_target(conn, &inc.input, "right")
+                .await?
+                .parse()
+                .unwrap();
+
+            let r = left + right;
+            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+        }
+        "minus" => {
+            let left: f64 = inc::get_target(conn, &inc.input, "left")
+                .await?
+                .parse()
+                .unwrap();
+            let right: f64 = inc::get_target(conn, &inc.input, "right")
+                .await?
+                .parse()
+                .unwrap();
+
+            let r = left - right;
+            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+        }
+        "mul" => {
+            let left: f64 = inc::get_target(conn, &inc.input, "left")
+                .await?
+                .parse()
+                .unwrap();
+            let right: f64 = inc::get_target(conn, &inc.input, "right")
+                .await?
+                .parse()
+                .unwrap();
+
+            let r = left * right;
+            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+        }
+        "div" => {
+            let left: f64 = inc::get_target(conn, &inc.input, "left")
+                .await?
+                .parse()
+                .unwrap();
+            let right: f64 = inc::get_target(conn, &inc.input, "right")
+                .await?
+                .parse()
+                .unwrap();
+
+            let r = left / right;
+            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+        }
+        "mod" => {
+            let left: u64 = inc::get_target(conn, &inc.input, "left")
+                .await?
+                .parse()
+                .unwrap();
+            let right: u64 = inc::get_target(conn, &inc.input, "right")
+                .await?
+                .parse()
+                .unwrap();
+
+            let r = left % right;
+            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+        }
+        "jump" => {
+            let step: i32 = inc.input.parse().unwrap();
+            return Ok(step);
         }
         _ => {
             let r = invoke_script(conn, &mut inc.input.clone(), inc.code.clone()).await?;
             inc::set(conn, root, &inc.output, &r).await?;
         }
     }
-    Ok(())
+    Ok(1)
 }
 
 pub async fn unwrap_inc(conn: &mut MySqlConnection, root: &str, inc: &Inc) -> io::Result<Inc> {
@@ -98,12 +167,13 @@ pub async fn invoke_inc_v(
     root: &mut String,
     inc_v: &Vec<Inc>,
 ) -> io::Result<String> {
-    for inc in inc_v {
-        let inc = unwrap_inc(conn, &root, inc).await?;
+    let mut pos = 0i32;
+    while (pos as usize) < inc_v.len() {
+        let inc = unwrap_inc(conn, &root, &inc_v[pos as usize]).await?;
         if inc.code.as_str() == "return" {
             return Ok(inc.input);
         } else {
-            invoke_inc(conn, root, &inc).await?;
+            pos += invoke_inc(conn, root, &inc).await?;
         }
     }
     Ok(String::new())

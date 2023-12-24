@@ -57,7 +57,7 @@ pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Resu
                 v_.unwrap()
             };
             let code = &path[0..pos];
-            let path = &path[pos + 2..];
+            let path = &path[pos..];
 
             let pt = if arrow == "->" {
                 get_target_anyway(conn, root, code).await?
