@@ -69,11 +69,11 @@ pub async fn invoke_inc(
                 .unwrap();
 
             let r = if left < right {
-                "-1"
-            } else if left > right {
                 "1"
+            } else if left > right {
+                "3"
             } else {
-                "0"
+                "2"
             };
             inc::set(conn, root, &inc.output, r).await?;
         }
