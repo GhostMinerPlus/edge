@@ -36,6 +36,11 @@ mod raw {
     pub fn new_point() -> String {
         uuid::Uuid::new_v4().to_string()
     }
+
+    #[test]
+    fn test_new_point() {
+        println!("{}", new_point());
+    }
 }
 
 use std::io::{self, Error, ErrorKind};

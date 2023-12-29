@@ -1,3 +1,5 @@
+pub mod edge;
+
 use pnet::datalink;
 use sqlx::{MySql, Pool};
 use std::io::{self, Error};
