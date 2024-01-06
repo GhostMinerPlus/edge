@@ -39,7 +39,7 @@ pub async fn http_execute(
             return Err(Error::new(ErrorKind::Other, e.to_string()));
         }
         // json
-        Ok(json::from(r).dump())
+        Ok(r)
     })()
     .await
     {
