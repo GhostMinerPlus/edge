@@ -71,7 +71,5 @@ async fn serve(config: &Config) -> io::Result<()> {
     let address = format!("{}:{}", config.ip, config.port);
     log::info!("serving at {address}");
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, app).await.unwrap();
-
-    Ok(())
+    axum::serve(listener, app).await
 }
