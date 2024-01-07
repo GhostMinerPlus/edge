@@ -1,5 +1,5 @@
 # Edge
-A graph database using 'gasm' languiage
+A graph database using 'gasm' language
 
 # Quick start
 
