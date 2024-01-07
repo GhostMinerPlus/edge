@@ -15,3 +15,7 @@ db_url = "mysql://user:pass@host/database"
 # thread_num = 8
 # log_level = "INFO"
 ```
+Then it will serving at http://$ip:$port/$name
+
+# Usage
+curl http://$ip:$port/$name/execute -X POST --data "return any"
