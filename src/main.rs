@@ -1,37 +1,57 @@
 mod service;
-mod task;
 mod util;
 
 use std::{
-    fs,
     io::{self, Error, ErrorKind},
     sync::Arc,
 };
 
 use axum::{routing, Router};
-use serde::Deserialize;
+use earth::AsConfig;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, AsConfig)]
 struct Config {
     ip: String,
     name: String,
     port: u16,
     db_url: String,
     thread_num: u8,
-    host_v: Vec<String>,
+    log_level: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            ip: "0.0.0.0".to_string(),
+            name: "edge".to_string(),
+            port: 80,
+            db_url: Default::default(),
+            thread_num: 8,
+            log_level: "INFO".to_string(),
+        }
+    }
 }
 
 fn main() -> io::Result<()> {
-    let arg_v: Vec<String> = std::env::args().collect();
-    let file_name = if arg_v.len() == 2 {
-        arg_v[1].as_str()
+    let mut arg_v: Vec<String> = std::env::args().collect();
+    arg_v.remove(0);
+    let file_name = if !arg_v.is_empty() && !arg_v[0].starts_with("--") {
+        arg_v.remove(0)
     } else {
-        "config.toml"
+        "config.toml".to_string()
     };
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("INFO")).init();
-    let config_s = fs::read_to_string(file_name)?;
-    let config: Config =
-        toml::from_str(&config_s).map_err(|e| Error::new(io::ErrorKind::Other, e.message()))?;
+
+    let mut config = Config::default();
+    config.merge_by_file(&file_name);
+    if !arg_v.is_empty() {
+        config.merge_by_args(&arg_v);
+    }
+
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&config.log_level))
+        .init();
+    log::info!("{:?}", config);
+
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(config.thread_num as usize)
@@ -43,14 +63,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-async fn start_task(config: &Config) -> io::Result<()> {
-    let config_copy = config.clone();
-    log::info!("starting task 'report_ipv6'");
-    tokio::spawn(async move {
-        loop {
-            task::report_address6(&config_copy.name, config_copy.port, &config_copy.host_v).await;
-        }
-    });
+async fn start_task(_: &Config) -> io::Result<()> {
     Ok(())
 }
 
@@ -69,7 +82,7 @@ async fn serve(config: &Config) -> io::Result<()> {
 
     // run our app with hyper, listening globally on port 3000
     let address = format!("{}:{}", config.ip, config.port);
-    log::info!("serving at {address}");
+    log::info!("serving at {address}/{}", config.name);
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app).await
 }

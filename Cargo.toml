@@ -11,7 +11,6 @@ axum = "0.7.2"
 env_logger = "0.10.1"
 json = "0.12.4"
 log = "0.4.20"
-pnet = "0.34.0"
 reqwest = "0.11.23"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
@@ -19,3 +18,4 @@ sqlx = { version = "0.7.3", features = ["runtime-tokio-native-tls", "mysql"] }
 tokio = { version = "1.35.0", features = ["full"] }
 toml = "0.8.8"
 uuid = { version = "1.6.1", features = ["v4"] }
+earth = { git = "https://github.com/GhostMinerPlus/earth.git"  }
