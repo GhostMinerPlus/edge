@@ -15,7 +15,7 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
         let pair: Vec<&str> = line.split("=").collect();
         match pair.len() {
             1 => {
-                let word_v: Vec<&str> = pair[0].split(" ").collect();
+                let word_v: Vec<&str> = pair[0].trim().split(" ").collect();
                 inc_v.push(util::edge::Inc {
                     subject: word_v[0].trim().to_string(),
                     predicate: word_v[1].trim().to_string(),
@@ -24,7 +24,7 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
                 });
             }
             2 => {
-                let word_v: Vec<&str> = pair[1].split(" ").collect();
+                let word_v: Vec<&str> = pair[1].trim().split(" ").collect();
                 inc_v.push(util::edge::Inc {
                     subject: word_v[0].trim().to_string(),
                     predicate: word_v[1].trim().to_string(),
@@ -40,8 +40,7 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
+    use earth::AsConfig;
     use sqlx::{Acquire, MySql, Pool};
 
     use crate::Config;
@@ -56,21 +55,21 @@ mod tests {
     #[test]
     fn test_execute() {
         init();
+        let mut config = Config::default();
+        config.merge_by_file("config.toml");
         let f = async {
-            let config: Config =
-                toml::from_str(&fs::read_to_string("config.toml").unwrap()).unwrap();
             let pool: Pool<MySql> = sqlx::Pool::connect(&config.db_url).await.unwrap();
 
             let mut tr = pool.begin().await.unwrap();
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#"set xxx "edge->source"
-set xxx "edge->code"
-set xxx "edge->target"
-insert edge "edge->id"
-delete edge->id
-return edge->id"#,
+                r#""edge->source" = ? set xxx
+"edge->code" = ? set xxx
+"edge->target" = ? set xxx
+"edge->id" = ? insert edge
+? delete edge->id
+? return edge->id"#,
             )
             .await;
             tr.rollback().await.unwrap();
