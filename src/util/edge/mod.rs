@@ -11,16 +11,18 @@ async fn invoke_script(
 ) -> io::Result<String> {
     let mut inc_v = Vec::new();
     loop {
-        inc_v_h = match inc::get_target(conn, &inc_v_h, "next").await {
+        inc_v_h = match inc::get_object(conn, &inc_v_h, "next").await {
             Ok(r) => r,
             Err(_) => break,
         };
-        let code = inc::get_target(conn, &inc_v_h, "code").await?;
-        let input = inc::get_target(conn, &inc_v_h, "input").await?;
-        let output = inc::get_target(conn, &inc_v_h, "output").await?;
+        let subject = inc::get_object(conn, &inc_v_h, "subject").await?;
+        let predicate = inc::get_object(conn, &inc_v_h, "predicate").await?;
+        let object = inc::get_object(conn, &inc_v_h, "object").await?;
+        let output = inc::get_object(conn, &inc_v_h, "output").await?;
         inc_v.push(Inc {
-            code,
-            input,
+            subject,
+            predicate,
+            object,
             output,
         });
     }
@@ -33,8 +35,9 @@ async fn invoke_script(
 
 #[derive(Clone, Deserialize)]
 pub struct Inc {
-    pub code: String,
-    pub input: String,
+    pub subject: String,
+    pub predicate: String,
+    pub object: String,
     pub output: String,
 }
 
@@ -44,26 +47,26 @@ pub async fn invoke_inc(
     root: &mut String,
     inc: &Inc,
 ) -> io::Result<i32> {
-    match inc.code.as_str() {
+    match inc.predicate.as_str() {
         "set" => {
-            inc::set(conn, &root, &inc.output, &inc.input).await?;
+            inc::set(conn, &root, &inc.output, &inc.object).await?;
         }
         "delete" => {
-            inc::delete_edge(conn, &inc.input).await?;
+            inc::delete_edge(conn, &inc.object).await?;
         }
         "insert" => {
-            let source = inc::get_target(conn, &inc.input, "source").await?;
-            let code = inc::get_target(conn, &inc.input, "code").await?;
-            let target = inc::get_target(conn, &inc.input, "target").await?;
-            let id = inc::insert_edge(conn, &source, &code, &target).await?;
+            let subject = inc::get_object(conn, &inc.object, "subject").await?;
+            let predicate = inc::get_object(conn, &inc.object, "predicate").await?;
+            let object = inc::get_object(conn, &inc.object, "object").await?;
+            let id = inc::insert_edge(conn, &subject, &predicate, &object).await?;
             inc::set(conn, root, &inc.output, &id).await?;
         }
         "cmp" => {
-            let left: f64 = inc::get_target(conn, &inc.input, "left")
+            let left: f64 = inc::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_target(conn, &inc.input, "right")
+            let right: f64 = inc::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -78,11 +81,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.output, r).await?;
         }
         "add" => {
-            let left: f64 = inc::get_target(conn, &inc.input, "left")
+            let left: f64 = inc::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_target(conn, &inc.input, "right")
+            let right: f64 = inc::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -91,11 +94,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.output, &r.to_string()).await?;
         }
         "minus" => {
-            let left: f64 = inc::get_target(conn, &inc.input, "left")
+            let left: f64 = inc::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_target(conn, &inc.input, "right")
+            let right: f64 = inc::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -104,11 +107,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.output, &r.to_string()).await?;
         }
         "mul" => {
-            let left: f64 = inc::get_target(conn, &inc.input, "left")
+            let left: f64 = inc::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_target(conn, &inc.input, "right")
+            let right: f64 = inc::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -117,11 +120,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.output, &r.to_string()).await?;
         }
         "div" => {
-            let left: f64 = inc::get_target(conn, &inc.input, "left")
+            let left: f64 = inc::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_target(conn, &inc.input, "right")
+            let right: f64 = inc::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -130,11 +133,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.output, &r.to_string()).await?;
         }
         "mod" => {
-            let left: u64 = inc::get_target(conn, &inc.input, "left")
+            let left: u64 = inc::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: u64 = inc::get_target(conn, &inc.input, "right")
+            let right: u64 = inc::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -143,11 +146,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.output, &r.to_string()).await?;
         }
         "jump" => {
-            let step: i32 = inc.input.parse().unwrap();
+            let step: i32 = inc.object.parse().unwrap();
             return Ok(step);
         }
         _ => {
-            let r = invoke_script(conn, &mut inc.input.clone(), inc.code.clone()).await?;
+            let r = invoke_script(conn, &mut inc.object.clone(), inc.predicate.clone()).await?;
             inc::set(conn, root, &inc.output, &r).await?;
         }
     }
@@ -156,8 +159,9 @@ pub async fn invoke_inc(
 
 pub async fn unwrap_inc(conn: &mut MySqlConnection, root: &str, inc: &Inc) -> io::Result<Inc> {
     Ok(Inc {
-        code: inc::unwrap_value(conn, root, &inc.code).await?,
-        input: inc::unwrap_value(conn, root, &inc.input).await?,
+        subject: inc::unwrap_value(conn, root, &inc.subject).await?,
+        predicate: inc::unwrap_value(conn, root, &inc.predicate).await?,
+        object: inc::unwrap_value(conn, root, &inc.object).await?,
         output: inc::unwrap_value(conn, root, &inc.output).await?,
     })
 }
@@ -170,8 +174,8 @@ pub async fn invoke_inc_v(
     let mut pos = 0i32;
     while (pos as usize) < inc_v.len() {
         let inc = unwrap_inc(conn, &root, &inc_v[pos as usize]).await?;
-        if inc.code.as_str() == "return" {
-            return Ok(inc.input);
+        if inc.predicate.as_str() == "return" {
+            return Ok(inc.object);
         } else {
             pos += invoke_inc(conn, root, &inc).await?;
         }

@@ -3,7 +3,7 @@ mod raw {
 
     use sqlx::{MySqlConnection, Row};
 
-    pub async fn get_source(
+    pub async fn get_subject(
         conn: &mut MySqlConnection,
         code: &str,
         target: &str,
@@ -17,7 +17,7 @@ mod raw {
         Ok(row.get(0))
     }
 
-    pub async fn delete_code(
+    pub async fn delete_predicate(
         conn: &mut MySqlConnection,
         source: &str,
         code: &str,
@@ -65,16 +65,16 @@ pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Resu
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                get_target_anyway(conn, root, code).await?
+                get_object_anyway(conn, root, code).await?
             } else {
-                get_source_anyway(conn, code, root).await?
+                get_subject_anyway(conn, code, root).await?
             };
             get(conn, &pt, path).await
         } else {
             if arrow == "->" {
-                get_target_anyway(conn, root, path).await
+                get_object_anyway(conn, root, path).await
             } else {
-                get_source_anyway(conn, path, root).await
+                get_subject_anyway(conn, path, root).await
             }
         }
     } else {
@@ -114,7 +114,7 @@ pub async fn insert_edge(
     Ok(id)
 }
 
-pub async fn get_target(
+pub async fn get_object(
     conn: &mut MySqlConnection,
     source: &str,
     code: &str,
@@ -133,12 +133,12 @@ pub async fn get_target(
     Ok(target)
 }
 
-pub async fn get_target_anyway(
+pub async fn get_object_anyway(
     conn: &mut MySqlConnection,
     source: &str,
     code: &str,
 ) -> io::Result<String> {
-    match get_target(conn, source, code).await {
+    match get_object(conn, source, code).await {
         Ok(target) => Ok(target),
         Err(_) => {
             let target = raw::new_point();
@@ -148,12 +148,12 @@ pub async fn get_target_anyway(
     }
 }
 
-pub async fn get_source_anyway(
+pub async fn get_subject_anyway(
     conn: &mut MySqlConnection,
     code: &str,
     target: &str,
 ) -> io::Result<String> {
-    match raw::get_source(conn, code, target).await {
+    match raw::get_subject(conn, code, target).await {
         Ok(source) => Ok(source),
         Err(_) => {
             let source = raw::new_point();
@@ -163,12 +163,12 @@ pub async fn get_source_anyway(
     }
 }
 
-pub async fn set_target(
+pub async fn set_object(
     conn: &mut MySqlConnection,
     source: &str,
     code: &str,
     target: &str,
 ) -> io::Result<String> {
-    raw::delete_code(conn, source, code).await?;
+    raw::delete_predicate(conn, source, code).await?;
     insert_edge(conn, source, code, target).await
 }

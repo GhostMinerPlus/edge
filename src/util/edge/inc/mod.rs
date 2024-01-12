@@ -4,7 +4,7 @@ use std::io::{self, Error, ErrorKind};
 
 use sqlx::MySqlConnection;
 
-pub use graph::{get_target, insert_edge};
+pub use graph::{get_object, insert_edge};
 
 pub async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
     log::info!("deleting edge:{id}");
@@ -47,13 +47,13 @@ pub async fn set(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                graph::get_target_anyway(conn, root, code).await?
+                graph::get_object_anyway(conn, root, code).await?
             } else {
-                graph::get_source_anyway(conn, code, root).await?
+                graph::get_subject_anyway(conn, code, root).await?
             };
             set(conn, &pt, path, value).await
         } else {
-            graph::set_target(conn, root, path, value).await
+            graph::set_object(conn, root, path, value).await
         }
     } else {
         let _v = path.find("->");

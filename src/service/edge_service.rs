@@ -11,15 +11,29 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
         if line.is_empty() {
             continue;
         }
-        let mut word_v: Vec<&str> = line.split(" ").collect();
-        while word_v.len() < 3 {
-            word_v.push("");
+        // [output = ]<subject> <predicate> <object>
+        let pair: Vec<&str> = line.split("=").collect();
+        match pair.len() {
+            1 => {
+                let word_v: Vec<&str> = pair[0].split(" ").collect();
+                inc_v.push(util::edge::Inc {
+                    subject: word_v[0].trim().to_string(),
+                    predicate: word_v[1].trim().to_string(),
+                    object: word_v[2].trim().to_string(),
+                    output: "".to_string(),
+                });
+            }
+            2 => {
+                let word_v: Vec<&str> = pair[1].split(" ").collect();
+                inc_v.push(util::edge::Inc {
+                    subject: word_v[0].trim().to_string(),
+                    predicate: word_v[1].trim().to_string(),
+                    object: word_v[2].trim().to_string(),
+                    output: pair[0].trim().to_string(),
+                });
+            }
+            _ => todo!(),
         }
-        inc_v.push(util::edge::Inc {
-            code: word_v[0].to_string(),
-            input: word_v[1].to_string(),
-            output: word_v[2].to_string(),
-        });
     }
     util::edge::invoke_inc_v(conn, &mut root, &inc_v).await
 }
