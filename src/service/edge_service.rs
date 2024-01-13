@@ -11,25 +11,14 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
         if line.is_empty() {
             continue;
         }
-        // [output = ]<subject> <predicate> <object>
-        let pair: Vec<&str> = line.split("=").collect();
-        match pair.len() {
-            1 => {
-                let word_v: Vec<&str> = pair[0].trim().split(" ").collect();
+        // <subject> <predicate> <object>
+        let word_v: Vec<&str> = line.split(" ").collect();
+        match word_v.len() {
+            3 => {
                 inc_v.push(util::edge::Inc {
                     subject: word_v[0].trim().to_string(),
                     predicate: word_v[1].trim().to_string(),
                     object: word_v[2].trim().to_string(),
-                    output: "".to_string(),
-                });
-            }
-            2 => {
-                let word_v: Vec<&str> = pair[1].trim().split(" ").collect();
-                inc_v.push(util::edge::Inc {
-                    subject: word_v[0].trim().to_string(),
-                    predicate: word_v[1].trim().to_string(),
-                    object: word_v[2].trim().to_string(),
-                    output: pair[0].trim().to_string(),
                 });
             }
             _ => todo!(),
@@ -64,12 +53,12 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#""edge->source" = ? set xxx
-"edge->code" = ? set xxx
-"edge->target" = ? set xxx
-"edge->id" = ? insert edge
-? delete edge->id
-? return edge->id"#,
+                r#"edge subject xxx
+edge predicate xxx
+edge object xxx
+"edge->id" insert edge
+root delete edge->id
+root return edge->id"#,
             )
             .await;
             tr.rollback().await.unwrap();

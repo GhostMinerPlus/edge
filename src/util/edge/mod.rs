@@ -18,12 +18,10 @@ async fn invoke_script(
         let subject = inc::get_object(conn, &inc_v_h, "subject").await?;
         let predicate = inc::get_object(conn, &inc_v_h, "predicate").await?;
         let object = inc::get_object(conn, &inc_v_h, "object").await?;
-        let output = inc::get_object(conn, &inc_v_h, "output").await?;
         inc_v.push(Inc {
             subject,
             predicate,
             object,
-            output,
         });
     }
     if inc_v.is_empty() {
@@ -38,7 +36,6 @@ pub struct Inc {
     pub subject: String,
     pub predicate: String,
     pub object: String,
-    pub output: String,
 }
 
 #[async_recursion::async_recursion]
@@ -49,7 +46,7 @@ pub async fn invoke_inc(
 ) -> io::Result<i32> {
     match inc.predicate.as_str() {
         "set" => {
-            inc::set(conn, &root, &inc.output, &inc.object).await?;
+            inc::set(conn, &root, &inc.subject, &inc.object).await?;
         }
         "delete" => {
             inc::delete_edge(conn, &inc.object).await?;
@@ -59,7 +56,7 @@ pub async fn invoke_inc(
             let predicate = inc::get_object(conn, &inc.object, "predicate").await?;
             let object = inc::get_object(conn, &inc.object, "object").await?;
             let id = inc::insert_edge(conn, &subject, &predicate, &object).await?;
-            inc::set(conn, root, &inc.output, &id).await?;
+            inc::set(conn, root, &inc.subject, &id).await?;
         }
         "cmp" => {
             let left: f64 = inc::get_object(conn, &inc.object, "left")
@@ -78,7 +75,7 @@ pub async fn invoke_inc(
             } else {
                 "2"
             };
-            inc::set(conn, root, &inc.output, r).await?;
+            inc::set(conn, root, &inc.subject, r).await?;
         }
         "add" => {
             let left: f64 = inc::get_object(conn, &inc.object, "left")
@@ -91,7 +88,7 @@ pub async fn invoke_inc(
                 .unwrap();
 
             let r = left + right;
-            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+            inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "minus" => {
             let left: f64 = inc::get_object(conn, &inc.object, "left")
@@ -104,7 +101,7 @@ pub async fn invoke_inc(
                 .unwrap();
 
             let r = left - right;
-            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+            inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mul" => {
             let left: f64 = inc::get_object(conn, &inc.object, "left")
@@ -117,7 +114,7 @@ pub async fn invoke_inc(
                 .unwrap();
 
             let r = left * right;
-            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+            inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "div" => {
             let left: f64 = inc::get_object(conn, &inc.object, "left")
@@ -130,7 +127,7 @@ pub async fn invoke_inc(
                 .unwrap();
 
             let r = left / right;
-            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+            inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mod" => {
             let left: u64 = inc::get_object(conn, &inc.object, "left")
@@ -143,7 +140,7 @@ pub async fn invoke_inc(
                 .unwrap();
 
             let r = left % right;
-            inc::set(conn, root, &inc.output, &r.to_string()).await?;
+            inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "jump" => {
             let step: i32 = inc.object.parse().unwrap();
@@ -151,7 +148,7 @@ pub async fn invoke_inc(
         }
         _ => {
             let r = invoke_script(conn, &mut inc.object.clone(), inc.predicate.clone()).await?;
-            inc::set(conn, root, &inc.output, &r).await?;
+            inc::set(conn, root, &inc.subject, &r).await?;
         }
     }
     Ok(1)
@@ -162,7 +159,6 @@ pub async fn unwrap_inc(conn: &mut MySqlConnection, root: &str, inc: &Inc) -> io
         subject: inc::unwrap_value(conn, root, &inc.subject).await?,
         predicate: inc::unwrap_value(conn, root, &inc.predicate).await?,
         object: inc::unwrap_value(conn, root, &inc.object).await?,
-        output: inc::unwrap_value(conn, root, &inc.output).await?,
     })
 }
 
