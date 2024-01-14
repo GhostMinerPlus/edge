@@ -2,3 +2,4 @@
 /config.toml
 /build.sh
 /Dockerfile
+/start.sh
