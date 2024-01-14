@@ -6,6 +6,8 @@ use std::io;
 
 use crate::util::graph;
 
+use super::graph::{insert_edge, new_point};
+
 async fn invoke_script(
     conn: &mut MySqlConnection,
     root: &mut String,
@@ -66,15 +68,8 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, &id).await?;
         }
         "cmp" => {
-            let left: f64 = graph::get_object(conn, &inc.object, "left")
-                .await?
-                .parse()
-                .unwrap();
-            let right: f64 = graph::get_object(conn, &inc.object, "right")
-                .await?
-                .parse()
-                .unwrap();
-
+            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let right: f64 = inc.object.parse().unwrap();
             let r = if left < right {
                 "1"
             } else if left > right {
@@ -85,67 +80,32 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, r).await?;
         }
         "add" => {
-            let left: f64 = graph::get_object(conn, &inc.object, "left")
-                .await?
-                .parse()
-                .unwrap();
-            let right: f64 = graph::get_object(conn, &inc.object, "right")
-                .await?
-                .parse()
-                .unwrap();
-
+            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let right: f64 = inc.object.parse().unwrap();
             let r = left + right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "minus" => {
-            let left: f64 = graph::get_object(conn, &inc.object, "left")
-                .await?
-                .parse()
-                .unwrap();
-            let right: f64 = graph::get_object(conn, &inc.object, "right")
-                .await?
-                .parse()
-                .unwrap();
-
+            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let right: f64 = inc.object.parse().unwrap();
             let r = left - right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mul" => {
-            let left: f64 = graph::get_object(conn, &inc.object, "left")
-                .await?
-                .parse()
-                .unwrap();
-            let right: f64 = graph::get_object(conn, &inc.object, "right")
-                .await?
-                .parse()
-                .unwrap();
-
+            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let right: f64 = inc.object.parse().unwrap();
             let r = left * right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "div" => {
-            let left: f64 = graph::get_object(conn, &inc.object, "left")
-                .await?
-                .parse()
-                .unwrap();
-            let right: f64 = graph::get_object(conn, &inc.object, "right")
-                .await?
-                .parse()
-                .unwrap();
-
+            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let right: f64 = inc.object.parse().unwrap();
             let r = left / right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mod" => {
-            let left: u64 = graph::get_object(conn, &inc.object, "left")
-                .await?
-                .parse()
-                .unwrap();
-            let right: u64 = graph::get_object(conn, &inc.object, "right")
-                .await?
-                .parse()
-                .unwrap();
-
+            let left: i64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let right: i64 = inc.object.parse().unwrap();
             let r = left % right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
@@ -155,7 +115,10 @@ pub async fn invoke_inc(
         }
         _ => {
             // Not a atomic predicate
-            let r = invoke_script(conn, &mut inc.object.clone(), inc.predicate.clone()).await?;
+            let mut new_root = new_point();
+            insert_edge(conn, &new_root, "subject", &inc.subject).await?;
+            insert_edge(conn, &new_root, "object", &inc.object).await?;
+            let r = invoke_script(conn, &mut new_root, inc.predicate.clone()).await?;
             inc::set(conn, root, &inc.subject, &r).await?;
         }
     }
