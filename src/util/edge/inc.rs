@@ -2,7 +2,7 @@ use std::io::{self, Error, ErrorKind};
 
 use sqlx::MySqlConnection;
 
-use crate::util::graph;
+use crate::util::graph::{self, new_point};
 
 pub async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
     log::info!("deleting edge:{id}");
@@ -76,7 +76,9 @@ pub async fn unwrap_value(
     root: &str,
     value: &str,
 ) -> io::Result<String> {
-    if value.starts_with("\"") {
+    if value == "?" {
+        Ok(new_point())
+    } else if value.starts_with("\"") {
         Ok(value[1..value.len() - 1].to_string())
     } else if value.contains("->") || value.contains("<-") {
         graph::get(conn, root, value).await
