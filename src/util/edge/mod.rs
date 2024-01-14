@@ -4,6 +4,8 @@ use serde::Deserialize;
 use sqlx::MySqlConnection;
 use std::io;
 
+use crate::util::graph;
+
 async fn invoke_script(
     conn: &mut MySqlConnection,
     root: &mut String,
@@ -11,13 +13,13 @@ async fn invoke_script(
 ) -> io::Result<String> {
     let mut inc_v = Vec::new();
     loop {
-        inc_v_h = match inc::get_object(conn, &inc_v_h, "next").await {
+        inc_v_h = match graph::get_object(conn, &inc_v_h, "next").await {
             Ok(r) => r,
             Err(_) => break,
         };
-        let subject = inc::get_object(conn, &inc_v_h, "subject").await?;
-        let predicate = inc::get_object(conn, &inc_v_h, "predicate").await?;
-        let object = inc::get_object(conn, &inc_v_h, "object").await?;
+        let subject = graph::get_object(conn, &inc_v_h, "subject").await?;
+        let predicate = graph::get_object(conn, &inc_v_h, "predicate").await?;
+        let object = graph::get_object(conn, &inc_v_h, "object").await?;
         inc_v.push(Inc {
             subject,
             predicate,
@@ -44,7 +46,12 @@ pub async fn invoke_inc(
     root: &mut String,
     inc: &Inc,
 ) -> io::Result<i32> {
-    match inc.predicate.as_str() {
+    let class = if let Ok(object) = graph::get_object(conn, &inc.predicate, "class").await {
+        object
+    } else {
+        inc.predicate.clone()
+    };
+    match class.as_str() {
         "set" => {
             inc::set(conn, &root, &inc.subject, &inc.object).await?;
         }
@@ -52,18 +59,18 @@ pub async fn invoke_inc(
             inc::delete_edge(conn, &inc.object).await?;
         }
         "insert" => {
-            let subject = inc::get_object(conn, &inc.object, "subject").await?;
-            let predicate = inc::get_object(conn, &inc.object, "predicate").await?;
-            let object = inc::get_object(conn, &inc.object, "object").await?;
-            let id = inc::insert_edge(conn, &subject, &predicate, &object).await?;
+            let subject = graph::get_object(conn, &inc.object, "subject").await?;
+            let predicate = graph::get_object(conn, &inc.object, "predicate").await?;
+            let object = graph::get_object(conn, &inc.object, "object").await?;
+            let id = graph::insert_edge(conn, &subject, &predicate, &object).await?;
             inc::set(conn, root, &inc.subject, &id).await?;
         }
         "cmp" => {
-            let left: f64 = inc::get_object(conn, &inc.object, "left")
+            let left: f64 = graph::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_object(conn, &inc.object, "right")
+            let right: f64 = graph::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -78,11 +85,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, r).await?;
         }
         "add" => {
-            let left: f64 = inc::get_object(conn, &inc.object, "left")
+            let left: f64 = graph::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_object(conn, &inc.object, "right")
+            let right: f64 = graph::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -91,11 +98,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "minus" => {
-            let left: f64 = inc::get_object(conn, &inc.object, "left")
+            let left: f64 = graph::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_object(conn, &inc.object, "right")
+            let right: f64 = graph::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -104,11 +111,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mul" => {
-            let left: f64 = inc::get_object(conn, &inc.object, "left")
+            let left: f64 = graph::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_object(conn, &inc.object, "right")
+            let right: f64 = graph::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -117,11 +124,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "div" => {
-            let left: f64 = inc::get_object(conn, &inc.object, "left")
+            let left: f64 = graph::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: f64 = inc::get_object(conn, &inc.object, "right")
+            let right: f64 = graph::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -130,11 +137,11 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mod" => {
-            let left: u64 = inc::get_object(conn, &inc.object, "left")
+            let left: u64 = graph::get_object(conn, &inc.object, "left")
                 .await?
                 .parse()
                 .unwrap();
-            let right: u64 = inc::get_object(conn, &inc.object, "right")
+            let right: u64 = graph::get_object(conn, &inc.object, "right")
                 .await?
                 .parse()
                 .unwrap();
@@ -147,6 +154,7 @@ pub async fn invoke_inc(
             return Ok(step);
         }
         _ => {
+            // Not a atomic predicate
             let r = invoke_script(conn, &mut inc.object.clone(), inc.predicate.clone()).await?;
             inc::set(conn, root, &inc.subject, &r).await?;
         }

@@ -5,7 +5,7 @@ use sqlx::MySqlConnection;
 use crate::util;
 
 pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<String> {
-    let mut root = "root".to_string();
+    let mut root = util::graph::new_point();
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {
@@ -53,12 +53,9 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#"edge subject xxx
-edge predicate xxx
-edge object xxx
-"edge->id" insert edge
-root delete edge->id
-root return edge->id"#,
+                r#""->var" set 1
+"->var" add 1
+? return ->var"#,
             )
             .await;
             tr.rollback().await.unwrap();

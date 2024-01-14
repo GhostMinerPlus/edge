@@ -1,10 +1,8 @@
-mod graph;
-
 use std::io::{self, Error, ErrorKind};
 
 use sqlx::MySqlConnection;
 
-pub use graph::{get_object, insert_edge};
+use crate::util::graph;
 
 pub async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
     log::info!("deleting edge:{id}");
