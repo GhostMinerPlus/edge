@@ -79,6 +79,16 @@ pub async fn invoke_inc(
             };
             inc::set(conn, root, &inc.subject, r).await?;
         }
+        "cmp_str" => {
+            let left = graph::get(conn, root, &inc.subject).await?;
+            let right = &inc.object;
+            let r = if &left == right {
+                "1"
+            } else {
+                "2"
+            };
+            inc::set(conn, root, &inc.subject, r).await?;
+        }
         "add" => {
             let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
             let right: f64 = inc.object.parse().unwrap();
