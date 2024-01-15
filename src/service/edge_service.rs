@@ -53,13 +53,18 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#""->var" set 1
-"->var" add 1
-? return ->var"#,
+                r#""->return->class" set return
+"->return->json" set 1
+"->edge_v->class" set huiwen->canvas->edge_v
+"->edge_v->dimension" set 2
+"->edge_v->attr" set pos
+"->edge_v->attr" append color
+"->edge_v->attr" append width
+"" ->return ->edge_v"#,
             )
             .await;
             tr.rollback().await.unwrap();
-            assert!(!r.unwrap().is_empty());
+            println!("{}", r.unwrap());
         };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

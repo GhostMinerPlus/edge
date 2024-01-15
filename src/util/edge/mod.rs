@@ -35,6 +35,27 @@ async fn invoke_script(
     }
 }
 
+async fn get_arr(
+    conn: &mut MySqlConnection,
+    object: &str,
+    attr_v: &Vec<String>,
+) -> io::Result<json::Array> {
+    let mut arr = json::Array::new();
+    let mut iter = graph::get_object_or_empty(conn, object, "first").await?;
+    let last = graph::get_object_or_empty(conn, object, "last").await?;
+    while !iter.is_empty() && iter != last {
+        let mut item = json::object! {};
+        for attr in attr_v {
+            item[attr] =
+                json::JsonValue::String(graph::get_object_or_empty(conn, &iter, attr).await?);
+        }
+        arr.push(item);
+        iter = graph::get_object_or_empty(conn, &iter, "next").await?;
+    }
+    return Ok(arr);
+}
+
+// Public
 #[derive(Clone, Deserialize)]
 pub struct Inc {
     pub subject: String,
@@ -42,20 +63,61 @@ pub struct Inc {
     pub object: String,
 }
 
+pub enum InvokeResult {
+    Jump(i32),
+    Return(String),
+}
+
 #[async_recursion::async_recursion]
 pub async fn invoke_inc(
     conn: &mut MySqlConnection,
     root: &mut String,
     inc: &Inc,
-) -> io::Result<i32> {
-    let class = if let Ok(object) = graph::get_object(conn, &inc.predicate, "class").await {
-        object
+) -> io::Result<InvokeResult> {
+    let (handler, class) = if let Ok(class) = graph::get_object(conn, &inc.predicate, "class").await
+    {
+        (inc.predicate.as_str(), class)
     } else {
-        inc.predicate.clone()
+        ("", inc.predicate.clone())
     };
     match class.as_str() {
+        "return" => {
+            if handler.is_empty() {
+                return Ok(InvokeResult::Return(inc.object.clone()));
+            }
+            if let Ok(_) = graph::get_object(conn, handler, "json").await {
+                // "" return --json huiwen->canvas->edge_v --dimension 2 --attr pos --attr color --attr width
+                let object = graph::get_object(conn, &inc.object, "class").await?;
+                let dimension = graph::get_object(conn, &inc.object, "dimension")
+                    .await?
+                    .parse::<i32>()
+                    .unwrap();
+                let attr_v = graph::get_object_v(conn, &inc.object, "attr").await?;
+                if dimension == 1 {
+                    let arr = get_arr(conn, &object, &attr_v).await?;
+                    return Ok(InvokeResult::Return(json::stringify(arr)));
+                } else if dimension == 2 {
+                    let mut arr = json::Array::new();
+                    let mut iter = graph::get_object_or_empty(conn, &object, "first").await?;
+                    let last = graph::get_object_or_empty(conn, &object, "last").await?;
+                    while !iter.is_empty() && iter != last {
+                        arr.push(json::JsonValue::Array(get_arr(conn, &iter, &attr_v).await?));
+                        iter = graph::get_object_or_empty(conn, &iter, "next").await?;
+                    }
+                    return Ok(InvokeResult::Return(json::stringify(arr)));
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "unsupported dimension",
+                    ));
+                }
+            }
+        }
         "set" => {
             inc::set(conn, &root, &inc.subject, &inc.object).await?;
+        }
+        "append" => {
+            inc::append(conn, &root, &inc.subject, &inc.object).await?;
         }
         "delete" => {
             inc::delete_edge(conn, &inc.object).await?;
@@ -68,7 +130,10 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, &id).await?;
         }
         "cmp" => {
-            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let left: f64 = graph::get_or_empty(conn, root, &inc.subject)
+                .await?
+                .parse()
+                .unwrap();
             let right: f64 = inc.object.parse().unwrap();
             let r = if left < right {
                 "1"
@@ -80,48 +145,59 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, r).await?;
         }
         "cmp_str" => {
-            let left = graph::get(conn, root, &inc.subject).await?;
+            let left = graph::get_or_empty(conn, root, &inc.subject).await?;
             let right = &inc.object;
-            let r = if &left == right {
-                "1"
-            } else {
-                "2"
-            };
+            let r = if &left == right { "1" } else { "2" };
             inc::set(conn, root, &inc.subject, r).await?;
         }
         "add" => {
-            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let left: f64 = graph::get_or_empty(conn, root, &inc.subject)
+                .await?
+                .parse()
+                .unwrap();
             let right: f64 = inc.object.parse().unwrap();
             let r = left + right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "minus" => {
-            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let left: f64 = graph::get_or_empty(conn, root, &inc.subject)
+                .await?
+                .parse()
+                .unwrap();
             let right: f64 = inc.object.parse().unwrap();
             let r = left - right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mul" => {
-            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let left: f64 = graph::get_or_empty(conn, root, &inc.subject)
+                .await?
+                .parse()
+                .unwrap();
             let right: f64 = inc.object.parse().unwrap();
             let r = left * right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "div" => {
-            let left: f64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let left: f64 = graph::get_or_empty(conn, root, &inc.subject)
+                .await?
+                .parse()
+                .unwrap();
             let right: f64 = inc.object.parse().unwrap();
             let r = left / right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "mod" => {
-            let left: i64 = graph::get(conn, root, &inc.subject).await?.parse().unwrap();
+            let left: i64 = graph::get_or_empty(conn, root, &inc.subject)
+                .await?
+                .parse()
+                .unwrap();
             let right: i64 = inc.object.parse().unwrap();
             let r = left % right;
             inc::set(conn, root, &inc.subject, &r.to_string()).await?;
         }
         "jump" => {
             let step: i32 = inc.object.parse().unwrap();
-            return Ok(step);
+            return Ok(InvokeResult::Jump(step));
         }
         _ => {
             // Not a atomic predicate
@@ -132,7 +208,7 @@ pub async fn invoke_inc(
             inc::set(conn, root, &inc.subject, &r).await?;
         }
     }
-    Ok(1)
+    Ok(InvokeResult::Jump(1))
 }
 
 pub async fn unwrap_inc(conn: &mut MySqlConnection, root: &str, inc: &Inc) -> io::Result<Inc> {
@@ -151,10 +227,11 @@ pub async fn invoke_inc_v(
     let mut pos = 0i32;
     while (pos as usize) < inc_v.len() {
         let inc = unwrap_inc(conn, &root, &inc_v[pos as usize]).await?;
-        if inc.predicate.as_str() == "return" {
-            return Ok(inc.object);
-        } else {
-            pos += invoke_inc(conn, root, &inc).await?;
+        match invoke_inc(conn, root, &inc).await? {
+            InvokeResult::Jump(step) => pos += step,
+            InvokeResult::Return(s) => {
+                return Ok(s);
+            }
         }
     }
     Ok(String::new())

@@ -76,7 +76,7 @@ pub fn new_point() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
+pub async fn get_or_empty(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
     match raw::get(conn, root, path).await {
         Ok(r) => Ok(r),
         Err(e) => match e.kind() {
@@ -111,8 +111,6 @@ pub async fn get_object(
     subject: &str,
     predicate: &str,
 ) -> io::Result<String> {
-    log::debug!("get_target: {subject}->{predicate}=?");
-
     let row = sqlx::query("select object from edge_t where subject=? and predicate=?")
         .bind(subject)
         .bind(predicate)
@@ -124,6 +122,39 @@ pub async fn get_object(
         })?;
     let object = row.get(0);
     Ok(object)
+}
+
+pub async fn get_object_or_empty(
+    conn: &mut MySqlConnection,
+    subject: &str,
+    predicate: &str,
+) -> io::Result<String> {
+    let rs = get_object(conn, subject, predicate).await;
+    match rs {
+        Ok(object) => Ok(object),
+        Err(e) => match e.kind() {
+            ErrorKind::NotFound => Ok(String::new()),
+            _ => Err(e),
+        },
+    }
+}
+
+pub async fn get_object_v(
+    conn: &mut MySqlConnection,
+    subject: &str,
+    predicate: &str,
+) -> io::Result<Vec<String>> {
+    let row_v = sqlx::query("select object from edge_t where subject=? and predicate=?")
+        .bind(subject)
+        .bind(predicate)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    let mut rs = Vec::new();
+    for row in row_v {
+        rs.push(row.get(0));
+    }
+    Ok(rs)
 }
 
 pub async fn get_object_anyway(
@@ -180,5 +211,14 @@ pub async fn set_object(
     object: &str,
 ) -> io::Result<String> {
     raw::delete_predicate(conn, subject, predicate).await?;
+    insert_edge(conn, subject, predicate, object).await
+}
+
+pub async fn append_object(
+    conn: &mut MySqlConnection,
+    subject: &str,
+    predicate: &str,
+    object: &str,
+) -> io::Result<String> {
     insert_edge(conn, subject, predicate, object).await
 }
