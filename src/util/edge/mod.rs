@@ -6,7 +6,7 @@ use std::io;
 
 use crate::util::graph;
 
-use super::graph::{insert_edge, new_point, get_list};
+use super::graph::{get_list, insert_edge, new_point};
 
 async fn invoke_script(
     conn: &mut MySqlConnection,
@@ -33,25 +33,6 @@ async fn invoke_script(
     } else {
         invoke_inc_v(conn, root, &inc_v).await
     }
-}
-
-async fn get_arr(
-    conn: &mut MySqlConnection,
-    object: &str,
-    attr_v: &Vec<String>,
-) -> io::Result<json::Array> {
-    let mut arr = json::Array::new();
-    let mut iter = graph::get_object_or_empty(conn, object, "first").await?;
-    while !iter.is_empty() {
-        let mut item = json::object! {};
-        for attr in attr_v {
-            item[attr] =
-                json::JsonValue::String(graph::get_object_or_empty(conn, &iter, attr).await?);
-        }
-        arr.push(item);
-        iter = graph::get_object_or_empty(conn, &iter, "next").await?;
-    }
-    return Ok(arr);
 }
 
 // Public
@@ -86,24 +67,33 @@ pub async fn invoke_inc(
             }
             if let Ok(_) = graph::get_object(conn, handler, "json").await {
                 // "" return --json huiwen->canvas->edge_v --dimension 2 --attr pos --attr color --attr width
-                let object = graph::get_object(conn, &inc.object, "class").await?;
+                let mut iter = graph::get_object(conn, &inc.object, "class").await?;
                 let dimension = graph::get_object(conn, &inc.object, "dimension")
                     .await?
                     .parse::<i32>()
                     .unwrap();
                 let attr_v = graph::get_object_v(conn, &inc.object, "attr").await?;
                 if dimension == 1 {
-                    let arr = get_arr(conn, &object, &attr_v).await?;
-                    return Ok(InvokeResult::Return(json::stringify(arr)));
+                    let arr = get_list(conn, &mut iter, &attr_v).await?;
+                    return Ok(InvokeResult::Return(json::stringify(json::object! {
+                        "last": iter,
+                        "json": arr
+                    })));
                 } else if dimension == 2 {
+                    let mut last = iter.clone();
                     let mut arr = json::Array::new();
-                    let mut iter = graph::get_object_or_empty(conn, &object, "first").await?;
                     while !iter.is_empty() {
-                        let first = graph::get_object_or_empty(conn, &iter, "first").await?;
-                        arr.push(json::JsonValue::Array(get_list(conn, &first, &attr_v).await?));
+                        let mut sub_iter = graph::get_object_or_empty(conn, &iter, "first").await?;
+                        arr.push(json::JsonValue::Array(
+                            get_list(conn, &mut sub_iter, &attr_v).await?,
+                        ));
+                        last = iter.clone();
                         iter = graph::get_object_or_empty(conn, &iter, "next").await?;
                     }
-                    return Ok(InvokeResult::Return(json::stringify(arr)));
+                    return Ok(InvokeResult::Return(json::stringify(json::object! {
+                        "last": last,
+                        "json": arr
+                    })));
                 } else {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,

@@ -55,7 +55,7 @@ mod tests {
                 &mut conn,
                 r#""->return->class" set return
 "->return->json" set 1
-"->edge_v->class" set huiwen->canvas->edge_v
+"->edge_v->class" set huiwen->canvas->edge_v->first
 "->edge_v->dimension" set 2
 "->edge_v->attr" set pos
 "->edge_v->attr" append color

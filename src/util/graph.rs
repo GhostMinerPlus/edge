@@ -92,7 +92,7 @@ pub async fn get_or_empty(
 
 pub async fn get_list(
     conn: &mut MySqlConnection,
-    first: &str,
+    first: &mut String,
     attr_v: &Vec<String>,
 ) -> io::Result<json::Array> {
     let mut arr = json::Array::new();
@@ -140,7 +140,7 @@ FROM edge_t iter
 JOIN cte ON iter.subject = cte.object
 WHERE iter.predicate = 'next'
 )
-SELECT {item_v}
+SELECT {item_v}, t.object
 FROM
 (SELECT '{first}' as object
 UNION ALL
@@ -158,6 +158,7 @@ WHERE {condition}"
             let attr = &attr_v[i];
             obj[attr] = json::JsonValue::String(row.get(i));
         }
+        *first = row.get(attr_v.len());
         arr.push(obj);
     }
     Ok(arr)
