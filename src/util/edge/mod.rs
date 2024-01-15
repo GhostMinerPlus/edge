@@ -6,7 +6,7 @@ use std::io;
 
 use crate::util::graph;
 
-use super::graph::{insert_edge, new_point};
+use super::graph::{insert_edge, new_point, get_list};
 
 async fn invoke_script(
     conn: &mut MySqlConnection,
@@ -99,7 +99,8 @@ pub async fn invoke_inc(
                     let mut arr = json::Array::new();
                     let mut iter = graph::get_object_or_empty(conn, &object, "first").await?;
                     while !iter.is_empty() {
-                        arr.push(json::JsonValue::Array(get_arr(conn, &iter, &attr_v).await?));
+                        let first = graph::get_object_or_empty(conn, &iter, "first").await?;
+                        arr.push(json::JsonValue::Array(get_list(conn, &first, &attr_v).await?));
                         iter = graph::get_object_or_empty(conn, &iter, "next").await?;
                     }
                     return Ok(InvokeResult::Return(json::stringify(arr)));

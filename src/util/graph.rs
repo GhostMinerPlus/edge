@@ -76,7 +76,11 @@ pub fn new_point() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
-pub async fn get_or_empty(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
+pub async fn get_or_empty(
+    conn: &mut MySqlConnection,
+    root: &str,
+    path: &str,
+) -> io::Result<String> {
     match raw::get(conn, root, path).await {
         Ok(r) => Ok(r),
         Err(e) => match e.kind() {
@@ -84,6 +88,79 @@ pub async fn get_or_empty(conn: &mut MySqlConnection, root: &str, path: &str) ->
             _ => Err(e),
         },
     }
+}
+
+pub async fn get_list(
+    conn: &mut MySqlConnection,
+    first: &str,
+    attr_v: &Vec<String>,
+) -> io::Result<json::Array> {
+    let mut arr = json::Array::new();
+    let item_v = attr_v
+        .into_iter()
+        .map(|attr| format!("{attr}_t.object as {attr}"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc},{item}")
+            }
+        })
+        .unwrap();
+    let join_v = attr_v
+        .into_iter()
+        .map(|attr| format!("join edge_t {attr}_t on {attr}_t.subject = t.object"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc}\n{item}")
+            }
+        })
+        .unwrap();
+    let condition = attr_v
+        .into_iter()
+        .map(|attr| format!("{attr}_t.predicate = '{attr}'"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc} and {item}")
+            }
+        })
+        .unwrap();
+    let sql = format!(
+        "WITH RECURSIVE cte as (
+SELECT *
+FROM edge_t
+WHERE subject = '{first}' AND predicate = 'next'
+UNION ALL
+SELECT iter.*
+FROM edge_t iter
+JOIN cte ON iter.subject = cte.object
+WHERE iter.predicate = 'next'
+)
+SELECT {item_v}
+FROM
+(SELECT '{first}' as object
+UNION ALL
+SELECT object FROM cte) t
+{join_v}
+WHERE {condition}"
+    );
+    let rs = sqlx::query(&sql)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    for row in rs {
+        let mut obj = json::object! {};
+        for i in 0..attr_v.len() {
+            let attr = &attr_v[i];
+            obj[attr] = json::JsonValue::String(row.get(i));
+        }
+        arr.push(obj);
+    }
+    Ok(arr)
 }
 
 pub async fn insert_edge(
