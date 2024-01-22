@@ -34,14 +34,14 @@ pub async fn invoke_inc(
     match inc.code.as_str() {
         "return" => Ok(InvokeResult::Return(inc.target.clone())),
         "dump" => {
-            todo!()
+            Ok(InvokeResult::Return(inc::dump(conn, &inc.target).await?))
         }
         "set" => {
             inc::set(conn, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
-        "new" => {
-            inc::new(conn, &inc.source, &inc.target).await?;
+        "append" => {
+            inc::append(conn, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
         _ => todo!()

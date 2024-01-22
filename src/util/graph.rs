@@ -101,17 +101,36 @@ pub async fn get_target(
     source: &str,
     code: &str,
 ) -> io::Result<String> {
-    let row = sqlx::query("select target from edge_t where source=? and code=? order by no desc limit 1")
-        .bind(source)
-        .bind(code)
-        .fetch_one(conn)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
-            _ => Error::new(ErrorKind::Other, e),
-        })?;
+    let row =
+        sqlx::query("select target from edge_t where source=? and code=? order by no desc limit 1")
+            .bind(source)
+            .bind(code)
+            .fetch_one(conn)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
+                _ => Error::new(ErrorKind::Other, e),
+            })?;
     let target = row.get(0);
     Ok(target)
+}
+
+pub async fn get_target_v(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+) -> io::Result<Vec<String>> {
+    let rs = sqlx::query("select target from edge_t where source=? and code=? order by no")
+        .bind(source)
+        .bind(code)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    let mut arr = Vec::new();
+    for row in rs {
+        arr.push(row.get(0));
+    }
+    Ok(arr)
 }
 
 pub async fn get_target_anyway(
@@ -134,15 +153,16 @@ pub async fn get_source(
     code: &str,
     target: &str,
 ) -> io::Result<String> {
-    let row = sqlx::query("select source from edge_t where code=? and target=? order by no desc limit 1")
-        .bind(code)
-        .bind(target)
-        .fetch_one(conn)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
-            _ => Error::new(ErrorKind::Other, e),
-        })?;
+    let row =
+        sqlx::query("select source from edge_t where code=? and target=? order by no desc limit 1")
+            .bind(code)
+            .bind(target)
+            .fetch_one(conn)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
+                _ => Error::new(ErrorKind::Other, e),
+            })?;
     Ok(row.get(0))
 }
 
