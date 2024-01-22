@@ -11,14 +11,14 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
         if line.is_empty() {
             continue;
         }
-        // <subject> <predicate> <object>
+        // <source> <code> <target>
         let word_v: Vec<&str> = line.split(" ").collect();
         match word_v.len() {
             3 => {
                 inc_v.push(util::edge::Inc {
-                    subject: word_v[0].trim().to_string(),
-                    predicate: word_v[1].trim().to_string(),
-                    object: word_v[2].trim().to_string(),
+                    source: word_v[0].trim().to_string(),
+                    code: word_v[1].trim().to_string(),
+                    target: word_v[2].trim().to_string(),
                 });
             }
             _ => todo!(),

@@ -45,13 +45,13 @@ pub async fn set(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                graph::get_object_anyway(conn, root, code).await?
+                graph::get_target_anyway(conn, root, code).await?
             } else {
-                graph::get_subject_anyway(conn, code, root).await?
+                graph::get_source_anyway(conn, code, root).await?
             };
             set(conn, &pt, path, value).await
         } else {
-            graph::set_object(conn, root, path, value).await
+            graph::set_target(conn, root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -101,13 +101,13 @@ pub async fn append(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                graph::get_object_anyway(conn, root, code).await?
+                graph::get_target_anyway(conn, root, code).await?
             } else {
-                graph::get_subject_anyway(conn, code, root).await?
+                graph::get_source_anyway(conn, code, root).await?
             };
             append(conn, &pt, path, value).await
         } else {
-            graph::append_object(conn, root, path, value).await
+            graph::append_target(conn, root, path, value).await
         }
     } else {
         let _v = path.find("->");
