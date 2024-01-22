@@ -53,14 +53,9 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#""->return->class" set return
-"->return->json" set 1
-"->edge_v->class" set huiwen->canvas->edge_v->first
-"->edge_v->dimension" set 2
-"->edge_v->attr" set pos
-"->edge_v->attr" append color
-"->edge_v->attr" append width
-"" ->return ->edge_v"#,
+                r#""huiwen->version" set v0.1.0
+huiwen new canvas
+"" return huiwen->canvas"#,
             )
             .await;
             tr.rollback().await.unwrap();
