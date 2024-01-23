@@ -53,12 +53,17 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#""huiwen->version" set v0.1.0
-huiwen new canvas
-"" return huiwen->canvas"#,
+                r#""->result->root" set bf9e7faa-435f-4234-9e22-4db368a80396
+"->result->dimension" set edge
+"->result->dimension" append point
+"->result->attr" set pos
+"->result->attr" append color
+"->result->attr" append width
+"" dump ->result"#,
             )
             .await;
-            tr.rollback().await.unwrap();
+            let _ = tr.rollback().await;
+            // tr.rollback().await.unwrap();
             println!("{}", r.unwrap());
         };
         tokio::runtime::Builder::new_multi_thread()

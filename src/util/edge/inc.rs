@@ -2,7 +2,7 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::util::graph::{self, append_target, get_target, get_target_v, new_point};
+use crate::util::graph::{self, get_list, get_target, get_target_v, new_point};
 
 #[async_recursion::async_recursion]
 pub async fn set(
@@ -116,14 +116,13 @@ pub async fn append(
     }
 }
 
-pub async fn dump(
-    conn: &mut MySqlConnection,
-    target: &str,
-) -> io::Result<String> {
+pub async fn dump(conn: &mut MySqlConnection, target: &str) -> io::Result<String> {
     let root = get_target(conn, target, "root").await?;
     let dimension_v = get_target_v(conn, target, "dimension").await?;
-    let sql = format!(r#""#);
-    todo!()
+    let attr_v = get_target_v(conn, target, "attr").await?;
+
+    let rs = get_list(conn, &root, &dimension_v, &attr_v).await?;
+    Ok(json::stringify(rs))
 }
 
 pub async fn unwrap_value(

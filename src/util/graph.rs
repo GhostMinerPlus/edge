@@ -220,3 +220,103 @@ values
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     Ok(id)
 }
+
+pub async fn get_list(
+    conn: &mut MySqlConnection,
+    root: &str,
+    dimension_v: &Vec<String>,
+    attr_v: &Vec<String>,
+) -> io::Result<json::Array> {
+    let mut arr = json::Array::new();
+    let dimension_item_v = dimension_v
+        .into_iter()
+        .map(|dimension| format!("{dimension}_t.target as {dimension}"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc},{item}")
+            }
+        })
+        .unwrap();
+    let attr_item_v = attr_v
+        .into_iter()
+        .map(|attr| format!("{attr}_t.target as {attr}"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc},{item}")
+            }
+        })
+        .unwrap();
+    let mut pre_dimension = String::new();
+    let dimension_join_v = dimension_v
+        .into_iter()
+        .enumerate()
+        .map(|(i, dimension)| {
+            if i == 0 {
+                pre_dimension = dimension.clone();
+                format!("(select * from edge_t where code = '{dimension}' and source = '{root}') {dimension}_t")
+            } else {
+                let r = format!("(select * from edge_t where code = '{dimension}') {dimension}_t on {dimension}_t.source = {pre_dimension}_t.target");
+                pre_dimension = dimension.clone();
+                return r;
+            }
+        })
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc}\njoin {item}")
+            }
+        })
+        .unwrap();
+    let last_dimension = dimension_v.last().unwrap().clone();
+    let attr_join_v = attr_v
+        .into_iter()
+        .map(|attr| format!("(select * from edge_t where code = '{attr}') {attr}_t on {attr}_t.source = {last_dimension}_t.target"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc}\njoin {item}")
+            }
+        })
+        .unwrap();
+    let order_v = dimension_v
+        .into_iter()
+        .map(|dimension| format!("{dimension}_t.no"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc},{item}")
+            }
+        }).unwrap();
+    let sql = format!(
+        "SELECT {dimension_item_v}, {attr_item_v}
+FROM {dimension_join_v}
+join {attr_join_v}
+order by {order_v}"
+    );
+    log::debug!("{sql}");
+    let rs = sqlx::query(&sql)
+        .bind(root)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    for row in rs {
+        let mut obj = json::object! {};
+        for i in 0..dimension_v.len() {
+            let attr = &dimension_v[i];
+            obj[attr] = json::JsonValue::String(row.get(i));
+        }
+        for i in dimension_v.len()..dimension_v.len() + attr_v.len() {
+            let attr = &attr_v[i - dimension_v.len()];
+            obj[attr] = json::JsonValue::String(row.get(i));
+        }
+        arr.push(obj);
+    }
+    Ok(arr)
+}
