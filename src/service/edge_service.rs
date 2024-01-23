@@ -11,14 +11,14 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
         if line.is_empty() {
             continue;
         }
-        // <subject> <predicate> <object>
+        // <source> <code> <target>
         let word_v: Vec<&str> = line.split(" ").collect();
         match word_v.len() {
             3 => {
                 inc_v.push(util::edge::Inc {
-                    subject: word_v[0].trim().to_string(),
-                    predicate: word_v[1].trim().to_string(),
-                    object: word_v[2].trim().to_string(),
+                    source: word_v[0].trim().to_string(),
+                    code: word_v[1].trim().to_string(),
+                    target: word_v[2].trim().to_string(),
                 });
             }
             _ => todo!(),
@@ -53,17 +53,17 @@ mod tests {
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
-                r#""->return->class" set return
-"->return->json" set 1
-"->edge_v->class" set huiwen->canvas->edge_v->first
-"->edge_v->dimension" set 2
-"->edge_v->attr" set pos
-"->edge_v->attr" append color
-"->edge_v->attr" append width
-"" ->return ->edge_v"#,
+                r#""->result->root" set bf9e7faa-435f-4234-9e22-4db368a80396
+"->result->dimension" set edge
+"->result->dimension" append point
+"->result->attr" set pos
+"->result->attr" append color
+"->result->attr" append width
+"" dump ->result"#,
             )
             .await;
-            tr.rollback().await.unwrap();
+            let _ = tr.rollback().await;
+            // tr.rollback().await.unwrap();
             println!("{}", r.unwrap());
         };
         tokio::runtime::Builder::new_multi_thread()

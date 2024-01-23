@@ -1,19 +1,8 @@
-use std::io::{self, Error, ErrorKind};
+use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::util::graph::{self, new_point};
-
-pub async fn delete_edge(conn: &mut MySqlConnection, id: &str) -> io::Result<()> {
-    log::info!("deleting edge:{id}");
-
-    sqlx::query("delete from edge_t where id=?")
-        .bind(id)
-        .fetch_all(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-    Ok(())
-}
+use crate::util::graph::{self, get_list, get_target, get_target_v, new_point};
 
 #[async_recursion::async_recursion]
 pub async fn set(
@@ -45,13 +34,13 @@ pub async fn set(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                graph::get_object_anyway(conn, root, code).await?
+                graph::get_target_anyway(conn, root, code).await?
             } else {
-                graph::get_subject_anyway(conn, code, root).await?
+                graph::get_source_anyway(conn, code, root).await?
             };
             set(conn, &pt, path, value).await
         } else {
-            graph::set_object(conn, root, path, value).await
+            graph::set_target(conn, root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -101,13 +90,13 @@ pub async fn append(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                graph::get_object_anyway(conn, root, code).await?
+                graph::get_target_anyway(conn, root, code).await?
             } else {
-                graph::get_subject_anyway(conn, code, root).await?
+                graph::get_source_anyway(conn, code, root).await?
             };
             append(conn, &pt, path, value).await
         } else {
-            graph::append_object(conn, root, path, value).await
+            graph::append_target(conn, root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -125,6 +114,15 @@ pub async fn append(
 
         append(conn, root, path, value).await
     }
+}
+
+pub async fn dump(conn: &mut MySqlConnection, target: &str) -> io::Result<String> {
+    let root = get_target(conn, target, "root").await?;
+    let dimension_v = get_target_v(conn, target, "dimension").await?;
+    let attr_v = get_target_v(conn, target, "attr").await?;
+
+    let rs = get_list(conn, &root, &dimension_v, &attr_v).await?;
+    Ok(json::stringify(rs))
 }
 
 pub async fn unwrap_value(

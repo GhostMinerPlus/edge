@@ -1,23 +1,7 @@
 mod raw {
-    use std::io::{self, Error, ErrorKind};
+    use std::io;
 
     use sqlx::MySqlConnection;
-
-    pub async fn delete_predicate(
-        conn: &mut MySqlConnection,
-        subject: &str,
-        predicate: &str,
-    ) -> io::Result<()> {
-        log::debug!("delete_code: {subject}->{predicate}");
-
-        sqlx::query("delete from edge_t where subject=? and predicate=?")
-            .bind(&subject)
-            .bind(&predicate)
-            .execute(conn)
-            .await
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-        Ok(())
-    }
 
     #[async_recursion::async_recursion]
     pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
@@ -33,20 +17,20 @@ mod raw {
                 } else {
                     v_.unwrap()
                 };
-                let predicate = &path[0..pos];
+                let code = &path[0..pos];
                 let path = &path[pos..];
 
                 let pt = if arrow == "->" {
-                    super::get_object(conn, root, predicate).await?
+                    super::get_target(conn, root, code).await?
                 } else {
-                    super::get_subject(conn, predicate, root).await?
+                    super::get_source(conn, code, root).await?
                 };
                 get(conn, &pt, path).await
             } else {
                 if arrow == "->" {
-                    super::get_object(conn, root, path).await
+                    super::get_target(conn, root, path).await
                 } else {
-                    super::get_subject(conn, path, root).await
+                    super::get_source(conn, path, root).await
                 }
             }
         } else {
@@ -90,15 +74,163 @@ pub async fn get_or_empty(
     }
 }
 
+pub async fn insert_edge(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+    no: u64,
+    target: &str,
+) -> io::Result<String> {
+    log::debug!("insert_edge: {source}->{code}={target}");
+
+    let id = new_point();
+    sqlx::query("insert into edge_t (id,source,code,no,target) values (?,?,?,?,?)")
+        .bind(&id)
+        .bind(&source)
+        .bind(&code)
+        .bind(no)
+        .bind(&target)
+        .execute(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    Ok(id)
+}
+
+pub async fn get_target(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+) -> io::Result<String> {
+    let row =
+        sqlx::query("select target from edge_t where source=? and code=? order by no desc limit 1")
+            .bind(source)
+            .bind(code)
+            .fetch_one(conn)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
+                _ => Error::new(ErrorKind::Other, e),
+            })?;
+    let target = row.get(0);
+    Ok(target)
+}
+
+pub async fn get_target_v(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+) -> io::Result<Vec<String>> {
+    let rs = sqlx::query("select target from edge_t where source=? and code=? order by no")
+        .bind(source)
+        .bind(code)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    let mut arr = Vec::new();
+    for row in rs {
+        arr.push(row.get(0));
+    }
+    Ok(arr)
+}
+
+pub async fn get_target_anyway(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+) -> io::Result<String> {
+    match get_target(conn, source, code).await {
+        Ok(target) => Ok(target),
+        Err(_) => {
+            let target = new_point();
+            insert_edge(conn, source, code, 0, &target).await?;
+            Ok(target)
+        }
+    }
+}
+
+pub async fn get_source(
+    conn: &mut MySqlConnection,
+    code: &str,
+    target: &str,
+) -> io::Result<String> {
+    let row =
+        sqlx::query("select source from edge_t where code=? and target=? order by no desc limit 1")
+            .bind(code)
+            .bind(target)
+            .fetch_one(conn)
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
+                _ => Error::new(ErrorKind::Other, e),
+            })?;
+    Ok(row.get(0))
+}
+
+pub async fn get_source_anyway(
+    conn: &mut MySqlConnection,
+    code: &str,
+    target: &str,
+) -> io::Result<String> {
+    match get_source(conn, code, target).await {
+        Ok(source) => Ok(source),
+        Err(_) => {
+            let source = new_point();
+            insert_edge(conn, &source, code, 0, target).await?;
+            Ok(source)
+        }
+    }
+}
+
+pub async fn set_target(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+    target: &str,
+) -> io::Result<String> {
+    let id = new_point();
+    let sql = format!(
+        "insert into edge_t (id, source, code, no, target)
+values
+('{id}', '{source}', '{code}', ifnull((select max(t.no) from edge_t t where t.source = '{source}' and t.code = '{code}'), 0), '{target}')
+on duplicate key update
+target = '{target}'"
+    );
+    sqlx::query(&sql)
+        .execute(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(id)
+}
+
+pub async fn append_target(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+    target: &str,
+) -> io::Result<String> {
+    let id = new_point();
+    let sql = format!(
+        "insert into edge_t (id, source, code, no, target)
+values
+('{id}', '{source}', '{code}', ifnull((select max(t.no) + 1 from edge_t t where t.source = '{source}' and t.code = '{code}'), 0), '{target}')"
+    );
+    sqlx::query(&sql)
+        .execute(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(id)
+}
+
 pub async fn get_list(
     conn: &mut MySqlConnection,
-    first: &mut String,
+    root: &str,
+    dimension_v: &Vec<String>,
     attr_v: &Vec<String>,
 ) -> io::Result<json::Array> {
     let mut arr = json::Array::new();
-    let item_v = attr_v
+    let dimension_item_v = dimension_v
         .into_iter()
-        .map(|attr| format!("{attr}_t.object as {attr}"))
+        .map(|dimension| format!("{dimension}_t.target as {dimension}"))
         .reduce(|acc, item| {
             if acc.is_empty() {
                 item
@@ -107,196 +239,84 @@ pub async fn get_list(
             }
         })
         .unwrap();
-    let join_v = attr_v
+    let attr_item_v = attr_v
         .into_iter()
-        .map(|attr| format!("join edge_t {attr}_t on {attr}_t.subject = t.object"))
+        .map(|attr| format!("{attr}_t.target as {attr}"))
         .reduce(|acc, item| {
             if acc.is_empty() {
                 item
             } else {
-                format!("{acc}\n{item}")
+                format!("{acc},{item}")
             }
         })
         .unwrap();
-    let condition = attr_v
+    let mut pre_dimension = String::new();
+    let dimension_join_v = dimension_v
         .into_iter()
-        .map(|attr| format!("{attr}_t.predicate = '{attr}'"))
+        .enumerate()
+        .map(|(i, dimension)| {
+            if i == 0 {
+                pre_dimension = dimension.clone();
+                format!("(select * from edge_t where code = '{dimension}' and source = '{root}') {dimension}_t")
+            } else {
+                let r = format!("(select * from edge_t where code = '{dimension}') {dimension}_t on {dimension}_t.source = {pre_dimension}_t.target");
+                pre_dimension = dimension.clone();
+                return r;
+            }
+        })
         .reduce(|acc, item| {
             if acc.is_empty() {
                 item
             } else {
-                format!("{acc} and {item}")
+                format!("{acc}\njoin {item}")
             }
         })
         .unwrap();
+    let last_dimension = dimension_v.last().unwrap().clone();
+    let attr_join_v = attr_v
+        .into_iter()
+        .map(|attr| format!("(select * from edge_t where code = '{attr}') {attr}_t on {attr}_t.source = {last_dimension}_t.target"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc}\njoin {item}")
+            }
+        })
+        .unwrap();
+    let order_v = dimension_v
+        .into_iter()
+        .map(|dimension| format!("{dimension}_t.no"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc},{item}")
+            }
+        }).unwrap();
     let sql = format!(
-        "WITH RECURSIVE cte as (
-SELECT *
-FROM edge_t
-WHERE subject = '{first}' AND predicate = 'next'
-UNION ALL
-SELECT iter.*
-FROM edge_t iter
-JOIN cte ON iter.subject = cte.object
-WHERE iter.predicate = 'next'
-)
-SELECT {item_v}, t.object
-FROM
-(SELECT '{first}' as object
-UNION ALL
-SELECT object FROM cte) t
-{join_v}
-WHERE {condition}"
+        "SELECT {dimension_item_v}, {attr_item_v}
+FROM {dimension_join_v}
+join {attr_join_v}
+order by {order_v}"
     );
+    log::debug!("{sql}");
     let rs = sqlx::query(&sql)
+        .bind(root)
         .fetch_all(conn)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     for row in rs {
         let mut obj = json::object! {};
-        for i in 0..attr_v.len() {
-            let attr = &attr_v[i];
+        for i in 0..dimension_v.len() {
+            let attr = &dimension_v[i];
             obj[attr] = json::JsonValue::String(row.get(i));
         }
-        *first = row.get(attr_v.len());
+        for i in dimension_v.len()..dimension_v.len() + attr_v.len() {
+            let attr = &attr_v[i - dimension_v.len()];
+            obj[attr] = json::JsonValue::String(row.get(i));
+        }
         arr.push(obj);
     }
     Ok(arr)
-}
-
-pub async fn insert_edge(
-    conn: &mut MySqlConnection,
-    subject: &str,
-    predicate: &str,
-    object: &str,
-) -> io::Result<String> {
-    log::debug!("insert_edge: {subject}->{predicate}={object}");
-
-    let id = new_point();
-    sqlx::query("insert into edge_t (id,subject,predicate,object) values (?,?,?,?)")
-        .bind(&id)
-        .bind(&subject)
-        .bind(&predicate)
-        .bind(&object)
-        .execute(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-    Ok(id)
-}
-
-pub async fn get_object(
-    conn: &mut MySqlConnection,
-    subject: &str,
-    predicate: &str,
-) -> io::Result<String> {
-    let row = sqlx::query("select object from edge_t where subject=? and predicate=?")
-        .bind(subject)
-        .bind(predicate)
-        .fetch_one(conn)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
-            _ => Error::new(ErrorKind::Other, e),
-        })?;
-    let object = row.get(0);
-    Ok(object)
-}
-
-pub async fn get_object_or_empty(
-    conn: &mut MySqlConnection,
-    subject: &str,
-    predicate: &str,
-) -> io::Result<String> {
-    let rs = get_object(conn, subject, predicate).await;
-    match rs {
-        Ok(object) => Ok(object),
-        Err(e) => match e.kind() {
-            ErrorKind::NotFound => Ok(String::new()),
-            _ => Err(e),
-        },
-    }
-}
-
-pub async fn get_object_v(
-    conn: &mut MySqlConnection,
-    subject: &str,
-    predicate: &str,
-) -> io::Result<Vec<String>> {
-    let row_v = sqlx::query("select object from edge_t where subject=? and predicate=?")
-        .bind(subject)
-        .bind(predicate)
-        .fetch_all(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    let mut rs = Vec::new();
-    for row in row_v {
-        rs.push(row.get(0));
-    }
-    Ok(rs)
-}
-
-pub async fn get_object_anyway(
-    conn: &mut MySqlConnection,
-    subject: &str,
-    predicate: &str,
-) -> io::Result<String> {
-    match get_object(conn, subject, predicate).await {
-        Ok(object) => Ok(object),
-        Err(_) => {
-            let object = new_point();
-            insert_edge(conn, subject, predicate, &object).await?;
-            Ok(object)
-        }
-    }
-}
-
-pub async fn get_subject(
-    conn: &mut MySqlConnection,
-    predicate: &str,
-    object: &str,
-) -> io::Result<String> {
-    let row = sqlx::query("select subject from edge_t where predicate=? and object=?")
-        .bind(predicate)
-        .bind(object)
-        .fetch_one(conn)
-        .await
-        .map_err(|e| match e {
-            sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
-            _ => Error::new(ErrorKind::Other, e),
-        })?;
-    Ok(row.get(0))
-}
-
-pub async fn get_subject_anyway(
-    conn: &mut MySqlConnection,
-    predicate: &str,
-    object: &str,
-) -> io::Result<String> {
-    match get_subject(conn, predicate, object).await {
-        Ok(subject) => Ok(subject),
-        Err(_) => {
-            let subject = new_point();
-            insert_edge(conn, &subject, predicate, object).await?;
-            Ok(subject)
-        }
-    }
-}
-
-pub async fn set_object(
-    conn: &mut MySqlConnection,
-    subject: &str,
-    predicate: &str,
-    object: &str,
-) -> io::Result<String> {
-    raw::delete_predicate(conn, subject, predicate).await?;
-    insert_edge(conn, subject, predicate, object).await
-}
-
-pub async fn append_object(
-    conn: &mut MySqlConnection,
-    subject: &str,
-    predicate: &str,
-    object: &str,
-) -> io::Result<String> {
-    insert_edge(conn, subject, predicate, object).await
 }
