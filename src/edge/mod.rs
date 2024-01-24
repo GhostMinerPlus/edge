@@ -4,19 +4,13 @@ use serde::Deserialize;
 use sqlx::MySqlConnection;
 use std::io;
 
+mod graph;
+
 // Public
 #[derive(Clone, Deserialize)]
 pub struct Inc {
     pub source: String,
     pub code: String,
-    pub target: String,
-}
-
-#[derive(Clone, Deserialize)]
-pub struct Edge {
-    pub source: String,
-    pub code: String,
-    pub no: u64,
     pub target: String,
 }
 

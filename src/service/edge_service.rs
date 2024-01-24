@@ -2,7 +2,7 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::util::{self, new_point};
+use crate::{app::new_point, edge};
 
 pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<String> {
     let mut root = new_point();
@@ -15,7 +15,7 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
         let word_v: Vec<&str> = line.split(" ").collect();
         match word_v.len() {
             3 => {
-                inc_v.push(util::edge::Inc {
+                inc_v.push(edge::Inc {
                     source: word_v[0].trim().to_string(),
                     code: word_v[1].trim().to_string(),
                     target: word_v[2].trim().to_string(),
@@ -24,7 +24,7 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
             _ => todo!(),
         }
     }
-    util::edge::invoke_inc_v(conn, &mut root, &inc_v).await
+    edge::invoke_inc_v(conn, &mut root, &inc_v).await
 }
 
 #[cfg(test)]

@@ -2,7 +2,13 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::util::{graph::{self, get_list, get_target, get_target_v}, new_point};
+use crate::{
+    app::new_point,
+    edge::graph::{
+        append_target, get_list, get_or_empty, get_source_anyway, get_target, get_target_anyway,
+        get_target_v, set_target,
+    },
+};
 
 #[async_recursion::async_recursion]
 pub async fn set(
@@ -34,13 +40,13 @@ pub async fn set(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                graph::get_target_anyway(conn, root, code).await?
+                get_target_anyway(conn, root, code).await?
             } else {
-                graph::get_source_anyway(conn, code, root).await?
+                get_source_anyway(conn, code, root).await?
             };
             set(conn, &pt, path, value).await
         } else {
-            graph::set_target(conn, root, path, value).await
+            set_target(conn, root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -90,13 +96,13 @@ pub async fn append(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                graph::get_target_anyway(conn, root, code).await?
+                get_target_anyway(conn, root, code).await?
             } else {
-                graph::get_source_anyway(conn, code, root).await?
+                get_source_anyway(conn, code, root).await?
             };
             append(conn, &pt, path, value).await
         } else {
-            graph::append_target(conn, root, path, value).await
+            append_target(conn, root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -135,7 +141,7 @@ pub async fn unwrap_value(
     } else if value.starts_with("\"") {
         Ok(value[1..value.len() - 1].to_string())
     } else if value.contains("->") || value.contains("<-") {
-        graph::get_or_empty(conn, root, value).await
+        get_or_empty(conn, root, value).await
     } else {
         Ok(value.to_string())
     }

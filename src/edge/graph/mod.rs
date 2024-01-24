@@ -2,7 +2,7 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::util::new_point;
+use crate::app::new_point;
 
 mod dao;
 

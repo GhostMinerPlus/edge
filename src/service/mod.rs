@@ -8,7 +8,7 @@ use std::{
 use axum::{extract::State, http::StatusCode};
 use sqlx::Acquire;
 
-use crate::util::AppState;
+use crate::app::AppState;
 
 pub async fn http_execute(
     State(state): State<Arc<AppState>>,

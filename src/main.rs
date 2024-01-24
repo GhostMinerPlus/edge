@@ -1,6 +1,3 @@
-mod service;
-mod util;
-
 use std::{
     io::{self, Error, ErrorKind},
     sync::Arc,
@@ -9,6 +6,10 @@ use std::{
 use axum::{routing, Router};
 use earth::AsConfig;
 use serde::{Deserialize, Serialize};
+
+mod app;
+mod edge;
+mod service;
 
 #[derive(Debug, Deserialize, Serialize, Clone, AsConfig)]
 struct Config {
@@ -74,7 +75,7 @@ async fn serve(config: &Config) -> io::Result<()> {
             &format!("/{}/execute", config.name),
             routing::post(service::http_execute),
         )
-        .with_state(Arc::new(util::AppState {
+        .with_state(Arc::new(app::AppState {
             pool: sqlx::Pool::connect(&config.db_url)
                 .await
                 .map_err(|e| Error::new(ErrorKind::InvalidData, e.to_string()))?,
