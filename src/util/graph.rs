@@ -1,41 +1,14 @@
-mod raw {
-    use std::io;
+use std::io::{self, Error, ErrorKind};
 
-    use sqlx::MySqlConnection;
+use sqlx::{MySqlConnection, Row};
 
-    #[async_recursion::async_recursion]
-    pub async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
-        if path.starts_with("->") || path.starts_with("<-") {
-            let (arrow, path) = (&path[0..2], &path[2..]);
-            let _v = path.find("->");
-            let v_ = path.find("<-");
-            if _v.is_some() || v_.is_some() {
-                let pos = if _v.is_some() && v_.is_some() {
-                    std::cmp::min(_v.unwrap(), v_.unwrap())
-                } else if _v.is_some() {
-                    _v.unwrap()
-                } else {
-                    v_.unwrap()
-                };
-                let code = &path[0..pos];
-                let path = &path[pos..];
-
-                let pt = if arrow == "->" {
-                    super::get_target(conn, root, code).await?
-                } else {
-                    super::get_source(conn, code, root).await?
-                };
-                get(conn, &pt, path).await
-            } else {
-                if arrow == "->" {
-                    super::get_target(conn, root, path).await
-                } else {
-                    super::get_source(conn, path, root).await
-                }
-            }
-        } else {
-            let _v = path.find("->");
-            let v_ = path.find("<-");
+#[async_recursion::async_recursion]
+async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
+    if path.starts_with("->") || path.starts_with("<-") {
+        let (arrow, path) = (&path[0..2], &path[2..]);
+        let _v = path.find("->");
+        let v_ = path.find("<-");
+        if _v.is_some() || v_.is_some() {
             let pos = if _v.is_some() && v_.is_some() {
                 std::cmp::min(_v.unwrap(), v_.unwrap())
             } else if _v.is_some() {
@@ -43,17 +16,38 @@ mod raw {
             } else {
                 v_.unwrap()
             };
-            let root = &path[0..pos];
+            let code = &path[0..pos];
             let path = &path[pos..];
 
-            get(conn, root, path).await
+            let pt = if arrow == "->" {
+                get_target(conn, root, code).await?
+            } else {
+                get_source(conn, code, root).await?
+            };
+            get(conn, &pt, path).await
+        } else {
+            if arrow == "->" {
+                get_target(conn, root, path).await
+            } else {
+                get_source(conn, path, root).await
+            }
         }
+    } else {
+        let _v = path.find("->");
+        let v_ = path.find("<-");
+        let pos = if _v.is_some() && v_.is_some() {
+            std::cmp::min(_v.unwrap(), v_.unwrap())
+        } else if _v.is_some() {
+            _v.unwrap()
+        } else {
+            v_.unwrap()
+        };
+        let root = &path[0..pos];
+        let path = &path[pos..];
+
+        get(conn, root, path).await
     }
 }
-
-use std::io::{self, Error, ErrorKind};
-
-use sqlx::{MySqlConnection, Row};
 
 // Public
 pub fn new_point() -> String {
@@ -65,7 +59,7 @@ pub async fn get_or_empty(
     root: &str,
     path: &str,
 ) -> io::Result<String> {
-    match raw::get(conn, root, path).await {
+    match get(conn, root, path).await {
         Ok(r) => Ok(r),
         Err(e) => match e.kind() {
             io::ErrorKind::NotFound => Ok(String::new()),
@@ -293,7 +287,8 @@ pub async fn get_list(
             } else {
                 format!("{acc},{item}")
             }
-        }).unwrap();
+        })
+        .unwrap();
     let sql = format!(
         "SELECT {dimension_item_v}, {attr_item_v}
 FROM {dimension_join_v}
