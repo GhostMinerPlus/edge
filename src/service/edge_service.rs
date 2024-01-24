@@ -2,10 +2,10 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::util;
+use crate::util::{self, new_point};
 
 pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<String> {
-    let mut root = util::graph::new_point();
+    let mut root = new_point();
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {

@@ -2,7 +2,7 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::util::graph::{self, get_list, get_target, get_target_v, new_point};
+use crate::util::{graph::{self, get_list, get_target, get_target_v}, new_point};
 
 #[async_recursion::async_recursion]
 pub async fn set(
