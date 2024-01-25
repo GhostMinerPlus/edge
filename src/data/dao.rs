@@ -42,6 +42,7 @@ pub async fn insert_edge_mp(
     if edge_mp.is_empty() {
         return Ok(());
     }
+    log::info!("commit edge_mp: {}", edge_mp.len());
     let value_v = edge_mp
         .into_iter()
         .map(|_| format!("(?,?,?,?,?)"))

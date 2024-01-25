@@ -58,6 +58,57 @@ pub async fn set(dm: &mut DataManager, root: &str, path: &str, value: &str) -> i
 }
 
 #[async_recursion::async_recursion]
+pub async fn asign(dm: &mut DataManager, root: &str, path: &str, value: &str) -> io::Result<String> {
+    if path.is_empty() {
+        return Ok(String::new());
+    }
+
+    if path.starts_with("->") || path.starts_with("<-") {
+        log::debug!("set {value} {root}{path}");
+        let arrow = &path[0..2];
+        let path = &path[2..];
+
+        let _v = path.find("->");
+        let v_ = path.find("<-");
+        if _v.is_some() || v_.is_some() {
+            let pos = if _v.is_some() && v_.is_some() {
+                std::cmp::min(_v.unwrap(), v_.unwrap())
+            } else if _v.is_some() {
+                _v.unwrap()
+            } else {
+                v_.unwrap()
+            };
+            let code = &path[0..pos];
+            let path = &path[pos..];
+
+            let pt = if arrow == "->" {
+                get_target_anyway(dm, root, code).await?
+            } else {
+                get_source_anyway(dm, code, root).await?
+            };
+            asign(dm, &pt, path, value).await
+        } else {
+            dm.insert_edge(root, path, 0, value).await
+        }
+    } else {
+        let _v = path.find("->");
+        let v_ = path.find("<-");
+        let pos = if _v.is_some() && v_.is_some() {
+            std::cmp::min(_v.unwrap(), v_.unwrap())
+        } else if _v.is_some() {
+            _v.unwrap()
+        } else {
+            v_.unwrap()
+        };
+        let root = &path[0..pos];
+        let path = &path[pos..];
+        log::debug!("set {value} {root}{path}");
+
+        asign(dm, root, path, value).await
+    }
+}
+
+#[async_recursion::async_recursion]
 pub async fn append(
     dm: &mut DataManager<'_>,
     root: &str,

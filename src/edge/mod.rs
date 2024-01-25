@@ -28,6 +28,10 @@ pub async fn invoke_inc(
     match inc.code.as_str() {
         "return" => Ok(InvokeResult::Return(inc.target.clone())),
         "dump" => Ok(InvokeResult::Return(inc::dump(dm, &inc.target).await?)),
+        "asign" => {
+            inc::asign(dm, &root, &inc.source, &inc.target).await?;
+            Ok(InvokeResult::Jump(1))
+        }
         "set" => {
             inc::set(dm, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
