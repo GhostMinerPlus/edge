@@ -3,6 +3,7 @@ use std::{
     io::{self, Error, ErrorKind},
 };
 
+use rust_decimal::prelude::ToPrimitive;
 use sqlx::{MySqlConnection, Row};
 
 use crate::mem_table::{new_point, Edge};
@@ -16,7 +17,8 @@ async fn get_next_no(conn: &mut MySqlConnection, source: &str, code: &str) -> io
     .fetch_one(conn)
     .await
     .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    Ok(row.get(0))
+    let no: rust_decimal::Decimal = row.get(0);
+    Ok(no.to_u64().unwrap())
 }
 
 async fn get_curr_no(conn: &mut MySqlConnection, source: &str, code: &str) -> io::Result<u64> {
@@ -28,7 +30,8 @@ async fn get_curr_no(conn: &mut MySqlConnection, source: &str, code: &str) -> io
     .fetch_one(conn)
     .await
     .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    Ok(row.get(0))
+    let no: rust_decimal::Decimal = row.get(0);
+    Ok(no.to_u64().unwrap())
 }
 
 // Public
