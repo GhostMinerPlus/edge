@@ -4,7 +4,7 @@ use sqlx::MySqlConnection;
 
 use crate::app::new_point;
 
-mod dao;
+mod cache;
 
 #[async_recursion::async_recursion]
 async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
@@ -54,7 +54,7 @@ async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<S
 }
 
 // Public
-pub use dao::{
+pub use cache::{
     append_target, get_list, get_source, get_target, get_target_v, insert_edge, set_target,
 };
 
