@@ -1,22 +1,13 @@
 use std::io;
 
-use sqlx::MySqlConnection;
-
 use crate::{
+    data::DataManager,
+    edge::graph::{get_or_empty, get_source_anyway, get_target_anyway},
     mem_table::new_point,
-    edge::graph::{
-        append_target, get_list, get_or_empty, get_source_anyway, get_target, get_target_anyway,
-        get_target_v, set_target,
-    },
 };
 
 #[async_recursion::async_recursion]
-pub async fn set(
-    conn: &mut MySqlConnection,
-    root: &str,
-    path: &str,
-    value: &str,
-) -> io::Result<String> {
+pub async fn set(dm: &mut DataManager, root: &str, path: &str, value: &str) -> io::Result<String> {
     if path.is_empty() {
         return Ok(String::new());
     }
@@ -40,13 +31,13 @@ pub async fn set(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                get_target_anyway(conn, root, code).await?
+                get_target_anyway(dm, root, code).await?
             } else {
-                get_source_anyway(conn, code, root).await?
+                get_source_anyway(dm, code, root).await?
             };
-            set(conn, &pt, path, value).await
+            set(dm, &pt, path, value).await
         } else {
-            set_target(conn, root, path, value).await
+            dm.set_target(root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -62,13 +53,13 @@ pub async fn set(
         let path = &path[pos..];
         log::debug!("set {value} {root}{path}");
 
-        set(conn, root, path, value).await
+        set(dm, root, path, value).await
     }
 }
 
 #[async_recursion::async_recursion]
 pub async fn append(
-    conn: &mut MySqlConnection,
+    dm: &mut DataManager<'_>,
     root: &str,
     path: &str,
     value: &str,
@@ -96,13 +87,13 @@ pub async fn append(
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                get_target_anyway(conn, root, code).await?
+                get_target_anyway(dm, root, code).await?
             } else {
-                get_source_anyway(conn, code, root).await?
+                get_source_anyway(dm, code, root).await?
             };
-            append(conn, &pt, path, value).await
+            append(dm, &pt, path, value).await
         } else {
-            append_target(conn, root, path, value).await
+            dm.append_target(root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -118,30 +109,26 @@ pub async fn append(
         let path = &path[pos..];
         log::debug!("append {value} {root}{path}");
 
-        append(conn, root, path, value).await
+        append(dm, root, path, value).await
     }
 }
 
-pub async fn dump(conn: &mut MySqlConnection, target: &str) -> io::Result<String> {
-    let root = get_target(conn, target, "root").await?;
-    let dimension_v = get_target_v(conn, target, "dimension").await?;
-    let attr_v = get_target_v(conn, target, "attr").await?;
+pub async fn dump(dm: &mut DataManager<'_>, target: &str) -> io::Result<String> {
+    let root = dm.get_target(target, "root").await?;
+    let dimension_v = dm.get_target_v(target, "dimension").await?;
+    let attr_v = dm.get_target_v(target, "attr").await?;
 
-    let rs = get_list(conn, &root, &dimension_v, &attr_v).await?;
+    let rs = dm.get_list(&root, &dimension_v, &attr_v).await?;
     Ok(json::stringify(rs))
 }
 
-pub async fn unwrap_value(
-    conn: &mut MySqlConnection,
-    root: &str,
-    value: &str,
-) -> io::Result<String> {
+pub async fn unwrap_value(dm: &mut DataManager<'_>, root: &str, value: &str) -> io::Result<String> {
     if value == "?" {
         Ok(new_point())
     } else if value.starts_with("\"") {
         Ok(value[1..value.len() - 1].to_string())
     } else if value.contains("->") || value.contains("<-") {
-        get_or_empty(conn, root, value).await
+        get_or_empty(dm, root, value).await
     } else {
         Ok(value.to_string())
     }

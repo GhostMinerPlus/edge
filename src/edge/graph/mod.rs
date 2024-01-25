@@ -1,13 +1,13 @@
 use std::io;
 
-use sqlx::MySqlConnection;
-
-use crate::mem_table::new_point;
-
-mod cache;
+use crate::{data::DataManager, mem_table::new_point};
 
 #[async_recursion::async_recursion]
-async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<String> {
+async fn get(
+    dm: &mut DataManager<'_>,
+    root: &str,
+    path: &str,
+) -> io::Result<String> {
     if path.starts_with("->") || path.starts_with("<-") {
         let (arrow, path) = (&path[0..2], &path[2..]);
         let _v = path.find("->");
@@ -24,16 +24,16 @@ async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<S
             let path = &path[pos..];
 
             let pt = if arrow == "->" {
-                get_target(conn, root, code).await?
+                dm.get_target(root, code).await?
             } else {
-                get_source(conn, code, root).await?
+                dm.get_source(code, root).await?
             };
-            get(conn, &pt, path).await
+            get(dm, &pt, path).await
         } else {
             if arrow == "->" {
-                get_target(conn, root, path).await
+                dm.get_target(root, path).await
             } else {
-                get_source(conn, path, root).await
+                dm.get_source(path, root).await
             }
         }
     } else {
@@ -49,21 +49,17 @@ async fn get(conn: &mut MySqlConnection, root: &str, path: &str) -> io::Result<S
         let root = &path[0..pos];
         let path = &path[pos..];
 
-        get(conn, root, path).await
+        get(dm, root, path).await
     }
 }
 
 // Public
-pub use cache::{
-    append_target, get_list, get_source, get_target, get_target_v, insert_edge, set_target,
-};
-
 pub async fn get_or_empty(
-    conn: &mut MySqlConnection,
+    dm: &mut DataManager<'_>,
     root: &str,
     path: &str,
 ) -> io::Result<String> {
-    match get(conn, root, path).await {
+    match get(dm, root, path).await {
         Ok(r) => Ok(r),
         Err(e) => match e.kind() {
             io::ErrorKind::NotFound => Ok(String::new()),
@@ -73,30 +69,30 @@ pub async fn get_or_empty(
 }
 
 pub async fn get_target_anyway(
-    conn: &mut MySqlConnection,
+    dm: &mut DataManager<'_>,
     source: &str,
     code: &str,
 ) -> io::Result<String> {
-    match get_target(conn, source, code).await {
+    match dm.get_target(source, code).await {
         Ok(target) => Ok(target),
         Err(_) => {
             let target = new_point();
-            insert_edge(conn, source, code, 0, &target).await?;
+            dm.insert_edge(source, code, 0, &target).await?;
             Ok(target)
         }
     }
 }
 
 pub async fn get_source_anyway(
-    conn: &mut MySqlConnection,
+    dm: &mut DataManager<'_>,
     code: &str,
     target: &str,
 ) -> io::Result<String> {
-    match get_source(conn, code, target).await {
+    match dm.get_source(code, target).await {
         Ok(source) => Ok(source),
         Err(_) => {
             let source = new_point();
-            insert_edge(conn, &source, code, 0, target).await?;
+            dm.insert_edge(&source, code, 0, target).await?;
             Ok(source)
         }
     }

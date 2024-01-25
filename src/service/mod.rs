@@ -24,8 +24,9 @@ pub async fn http_execute(
             .acquire()
             .await
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        let mut mem_table = state.mem_table.lock().await;
         // Execute
-        let r = match edge_service::execute(conn, &inc_v).await {
+        let r = match edge_service::execute(conn, &mut mem_table, &inc_v).await {
             Ok(r) => r,
             Err(e) => {
                 let _ = tr.rollback().await;

@@ -2,9 +2,9 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::{mem_table::new_point, edge};
+use crate::{data::DataManager, edge, mem_table::{new_point, MemTable}};
 
-pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<String> {
+pub async fn execute(conn: &mut MySqlConnection, mem_table: &mut MemTable, script: &str) -> io::Result<String> {
     let mut root = new_point();
     let mut inc_v = Vec::new();
     for line in script.lines() {
@@ -24,7 +24,8 @@ pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<Str
             _ => todo!(),
         }
     }
-    edge::invoke_inc_v(conn, &mut root, &inc_v).await
+    let mut dm = DataManager::new(conn, mem_table);
+    edge::invoke_inc_v(&mut dm, &mut root, &inc_v).await
 }
 
 #[cfg(test)]
@@ -32,7 +33,7 @@ mod tests {
     use earth::AsConfig;
     use sqlx::{Acquire, MySql, Pool};
 
-    use crate::Config;
+    use crate::{mem_table::MemTable, Config};
 
     fn init() {
         let _ =
@@ -48,11 +49,13 @@ mod tests {
         config.merge_by_file("config.toml");
         let f = async {
             let pool: Pool<MySql> = sqlx::Pool::connect(&config.db_url).await.unwrap();
+            let mut mem_table = MemTable::new();
 
             let mut tr = pool.begin().await.unwrap();
             let mut conn = tr.acquire().await.unwrap();
             let r = super::execute(
                 &mut conn,
+                &mut mem_table,
                 r#""->result->root" set bf9e7faa-435f-4234-9e22-4db368a80396
 "->result->dimension" set edge
 "->result->dimension" append point
