@@ -36,6 +36,9 @@ pub async fn insert_edge_mp(
     conn: &mut MySqlConnection,
     edge_mp: &HashMap<String, Edge>,
 ) -> io::Result<()> {
+    if edge_mp.is_empty() {
+        return Ok(());
+    }
     let value_v = edge_mp
         .into_iter()
         .map(|_| format!("(?,?,?,?,?)"))
