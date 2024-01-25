@@ -3,7 +3,7 @@ use std::io;
 use sqlx::MySqlConnection;
 
 use crate::{
-    app::new_point,
+    mem_table::new_point,
     edge::graph::{
         append_target, get_list, get_or_empty, get_source_anyway, get_target, get_target_anyway,
         get_target_v, set_target,

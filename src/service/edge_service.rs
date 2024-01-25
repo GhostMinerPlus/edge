@@ -2,7 +2,7 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::{app::new_point, edge};
+use crate::{mem_table::new_point, edge};
 
 pub async fn execute(conn: &mut MySqlConnection, script: &str) -> io::Result<String> {
     let mut root = new_point();

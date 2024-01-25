@@ -2,7 +2,7 @@ use std::io::{self, Error, ErrorKind};
 
 use sqlx::{MySqlConnection, Row};
 
-use crate::app::new_point;
+use crate::mem_table::new_point;
 
 // Public
 pub async fn insert_edge(

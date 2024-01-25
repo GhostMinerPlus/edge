@@ -2,7 +2,7 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::app::new_point;
+use crate::mem_table::new_point;
 
 mod cache;
 
