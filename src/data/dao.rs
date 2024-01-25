@@ -1,49 +1,87 @@
-use std::io::{self, Error, ErrorKind};
+use std::{
+    collections::HashMap,
+    io::{self, Error, ErrorKind},
+};
 
 use sqlx::{MySqlConnection, Row};
 
-use crate::mem_table::new_point;
+use crate::mem_table::{new_point, Edge};
+
+async fn get_next_no(conn: &mut MySqlConnection, source: &str, code: &str) -> io::Result<u64> {
+    let row = sqlx::query(
+        "select ifnull((select max(t.no) + 1 from edge_t t where t.source = ? and t.code = ?), 0)",
+    )
+    .bind(source)
+    .bind(code)
+    .fetch_one(conn)
+    .await
+    .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(row.get(0))
+}
+
+async fn get_curr_no(conn: &mut MySqlConnection, source: &str, code: &str) -> io::Result<u64> {
+    let row = sqlx::query(
+        "select ifnull((select max(t.no) from edge_t t where t.source = ? and t.code = ?), 0)",
+    )
+    .bind(source)
+    .bind(code)
+    .fetch_one(conn)
+    .await
+    .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(row.get(0))
+}
 
 // Public
-pub async fn insert_edge(
+pub async fn insert_edge_mp(
     conn: &mut MySqlConnection,
-    source: &str,
-    code: &str,
-    no: u64,
-    target: &str,
-) -> io::Result<String> {
-    log::debug!("insert_edge: {source}->{code}={target}");
+    edge_mp: &HashMap<String, Edge>,
+) -> io::Result<()> {
+    let value_v = edge_mp
+        .into_iter()
+        .map(|_| format!("(?,?,?,?,?)"))
+        .reduce(|acc, item| {
+            if acc.is_empty() {
+                item
+            } else {
+                format!("{acc},{item}")
+            }
+        })
+        .unwrap();
+    let sql = format!("insert into edge_t (id,source,code,no,target) values {value_v}");
+    let mut statement = sqlx::query(&sql);
+    for (_, edge) in edge_mp {
+        statement = statement
+            .bind(&edge.id)
+            .bind(&edge.source)
+            .bind(&edge.code)
+            .bind(edge.no)
+            .bind(&edge.target);
+    }
 
-    let id = new_point();
-    sqlx::query("insert into edge_t (id,source,code,no,target) values (?,?,?,?,?)")
-        .bind(&id)
-        .bind(&source)
-        .bind(&code)
-        .bind(no)
-        .bind(&target)
+    statement
         .execute(conn)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-    Ok(id)
+    Ok(())
 }
 
 pub async fn get_target(
     conn: &mut MySqlConnection,
     source: &str,
     code: &str,
-) -> io::Result<String> {
-    let row =
-        sqlx::query("select target from edge_t where source=? and code=? order by no desc limit 1")
-            .bind(source)
-            .bind(code)
-            .fetch_one(conn)
-            .await
-            .map_err(|e| match e {
-                sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
-                _ => Error::new(ErrorKind::Other, e),
-            })?;
-    let target = row.get(0);
-    Ok(target)
+) -> io::Result<(String, u64, String)> {
+    let row = sqlx::query(
+        "select id, no, target from edge_t where source=? and code=? order by no desc limit 1",
+    )
+    .bind(source)
+    .bind(code)
+    .fetch_one(conn)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
+        _ => Error::new(ErrorKind::Other, e),
+    })?;
+    Ok((row.get(0), row.get(1), row.get(2)))
 }
 
 pub async fn get_target_v(
@@ -68,18 +106,19 @@ pub async fn get_source(
     conn: &mut MySqlConnection,
     code: &str,
     target: &str,
-) -> io::Result<String> {
-    let row =
-        sqlx::query("select source from edge_t where code=? and target=? order by no desc limit 1")
-            .bind(code)
-            .bind(target)
-            .fetch_one(conn)
-            .await
-            .map_err(|e| match e {
-                sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
-                _ => Error::new(ErrorKind::Other, e),
-            })?;
-    Ok(row.get(0))
+) -> io::Result<(String, u64, String)> {
+    let row = sqlx::query(
+        "select id, no, source from edge_t where code=? and target=? order by no desc limit 1",
+    )
+    .bind(code)
+    .bind(target)
+    .fetch_one(conn)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
+        _ => Error::new(ErrorKind::Other, e),
+    })?;
+    Ok((row.get(0), row.get(1), row.get(2)))
 }
 
 pub async fn set_target(
@@ -87,20 +126,22 @@ pub async fn set_target(
     source: &str,
     code: &str,
     target: &str,
-) -> io::Result<String> {
+) -> io::Result<(String, u64)> {
     let id = new_point();
+    let curr_no = get_curr_no(conn, source, code).await?;
     let sql = format!(
         "insert into edge_t (id, source, code, no, target)
 values
-('{id}', '{source}', '{code}', ifnull((select max(t.no) from edge_t t where t.source = '{source}' and t.code = '{code}'), 0), '{target}')
+('{id}', '{source}', '{code}', ?, '{target}')
 on duplicate key update
 target = '{target}'"
     );
     sqlx::query(&sql)
+        .bind(curr_no)
         .execute(conn)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    Ok(id)
+    Ok((id, curr_no))
 }
 
 pub async fn append_target(
@@ -108,18 +149,20 @@ pub async fn append_target(
     source: &str,
     code: &str,
     target: &str,
-) -> io::Result<String> {
+) -> io::Result<(String, u64)> {
     let id = new_point();
+    let next_no = get_next_no(conn, source, code).await?;
     let sql = format!(
         "insert into edge_t (id, source, code, no, target)
 values
-('{id}', '{source}', '{code}', ifnull((select max(t.no) + 1 from edge_t t where t.source = '{source}' and t.code = '{code}'), 0), '{target}')"
+('{id}', '{source}', '{code}', ?, '{target}')"
     );
     sqlx::query(&sql)
+        .bind(next_no)
         .execute(conn)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    Ok(id)
+    Ok((id, next_no))
 }
 
 pub async fn get_list(

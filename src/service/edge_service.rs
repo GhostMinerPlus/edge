@@ -2,9 +2,17 @@ use std::io;
 
 use sqlx::MySqlConnection;
 
-use crate::{data::DataManager, edge, mem_table::{new_point, MemTable}};
+use crate::{
+    data::DataManager,
+    edge,
+    mem_table::{new_point, MemTable},
+};
 
-pub async fn execute(conn: &mut MySqlConnection, mem_table: &mut MemTable, script: &str) -> io::Result<String> {
+pub async fn execute(
+    conn: &mut MySqlConnection,
+    mem_table: &mut MemTable,
+    script: &str,
+) -> io::Result<String> {
     let mut root = new_point();
     let mut inc_v = Vec::new();
     for line in script.lines() {
@@ -25,7 +33,9 @@ pub async fn execute(conn: &mut MySqlConnection, mem_table: &mut MemTable, scrip
         }
     }
     let mut dm = DataManager::new(conn, mem_table);
-    edge::invoke_inc_v(&mut dm, &mut root, &inc_v).await
+    let rs = edge::invoke_inc_v(&mut dm, &mut root, &inc_v).await?;
+    dm.commit().await?;
+    Ok(rs)
 }
 
 #[cfg(test)]
