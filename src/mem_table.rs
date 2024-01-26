@@ -8,10 +8,6 @@ fn insert(mp: &mut HashMap<(String, String), Vec<String>>, k: (String, String), 
     }
 }
 
-fn is_temp(source: &str, code: &str, target: &str) -> bool {
-    source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
-}
-
 // Public
 pub fn new_point() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -78,7 +74,31 @@ impl MemTable {
             code: code.to_string(),
             no,
             target: target.to_string(),
-            status: if is_temp(source, code, target) { 1 } else { 0 },
+            status: 0,
+        };
+        self.edge_mp.insert(id.clone(), edge);
+        insert(
+            &mut self.inx_source_code,
+            (source.to_string(), code.to_string()),
+            id.clone(),
+        );
+        insert(
+            &mut self.inx_code_target,
+            (code.to_string(), target.to_string()),
+            id.clone(),
+        );
+        id
+    }
+
+    pub fn insert_temp_edge(&mut self, source: &str, code: &str, no: u64, target: &str) -> String {
+        let id = new_point();
+        let edge = Edge {
+            id: id.clone(),
+            source: source.to_string(),
+            code: code.to_string(),
+            no,
+            target: target.to_string(),
+            status: 1,
         };
         self.edge_mp.insert(id.clone(), edge);
         insert(

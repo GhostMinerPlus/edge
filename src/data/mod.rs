@@ -6,6 +6,10 @@ use crate::mem_table::MemTable;
 
 mod dao;
 
+fn is_temp(source: &str, code: &str, target: &str) -> bool {
+    source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
+}
+
 // Public
 pub struct DataManager<'a> {
     conn: &'a mut MySqlConnection,
@@ -24,7 +28,51 @@ impl<'a> DataManager<'a> {
         no: u64,
         target: &str,
     ) -> io::Result<String> {
-        Ok(self.mem_table.insert_edge(source, code, no, target))
+        if is_temp(source, code, target) {
+            Ok(self.mem_table.insert_temp_edge(source, code, no, target))
+        } else {
+            Ok(self.mem_table.insert_edge(source, code, no, target))
+        }
+    }
+
+    pub async fn set_target(
+        &mut self,
+        source: &str,
+        code: &str,
+        target: &str,
+    ) -> io::Result<String> {
+        if let Some(id) = self.mem_table.set_target(source, code, target) {
+            Ok(id)
+        } else {
+            if is_temp(source, code, target) {
+                Ok(self.mem_table.insert_temp_edge(source, code, 0, target))
+            } else {
+                let (id, no) = dao::set_target(&mut self.conn, source, code, target).await?;
+                self.mem_table
+                    .append_exists_edge(&id, source, code, no, target);
+                Ok(id)
+            }
+        }
+    }
+
+    pub async fn append_target(
+        &mut self,
+        source: &str,
+        code: &str,
+        target: &str,
+    ) -> io::Result<String> {
+        if let Some((no, _)) = self.mem_table.get_target(source, code) {
+            Ok(self.mem_table.insert_edge(source, code, no + 1, target))
+        } else {
+            if is_temp(source, code, target) {
+                Ok(self.mem_table.insert_temp_edge(source, code, 0, target))
+            } else {
+                let (id, no) = dao::append_target(&mut self.conn, source, code, target).await?;
+                self.mem_table
+                    .append_exists_edge(&id, source, code, no, target);
+                Ok(id)
+            }
+        }
     }
 
     pub async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {
@@ -52,38 +100,6 @@ impl<'a> DataManager<'a> {
     pub async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>> {
         self.commit().await?;
         dao::get_target_v(&mut self.conn, source, code).await
-    }
-
-    pub async fn set_target(
-        &mut self,
-        source: &str,
-        code: &str,
-        target: &str,
-    ) -> io::Result<String> {
-        if let Some(id) = self.mem_table.set_target(source, code, target) {
-            Ok(id)
-        } else {
-            let (id, no) = dao::set_target(&mut self.conn, source, code, target).await?;
-            self.mem_table
-                .append_exists_edge(&id, source, code, no, target);
-            Ok(id)
-        }
-    }
-
-    pub async fn append_target(
-        &mut self,
-        source: &str,
-        code: &str,
-        target: &str,
-    ) -> io::Result<String> {
-        if let Some((no, _)) = self.mem_table.get_target(source, code) {
-            Ok(self.mem_table.insert_edge(source, code, no + 1, target))
-        } else {
-            let (id, no) = dao::append_target(&mut self.conn, source, code, target).await?;
-            self.mem_table
-                .append_exists_edge(&id, source, code, no, target);
-            Ok(id)
-        }
     }
 
     pub async fn get_list(
