@@ -108,7 +108,7 @@ impl MemTable {
             .inx_code_target
             .get(&(code.to_string(), target.to_string()))
         {
-            Some(id_v) => Some(self.edge_mp[id_v.last().unwrap()].target.clone()),
+            Some(id_v) => Some(self.edge_mp[id_v.last().unwrap()].source.clone()),
             None => None,
         }
     }
@@ -129,6 +129,7 @@ impl MemTable {
 
     pub fn take(&mut self) -> HashMap<String, Edge> {
         self.inx_source_code.clear();
+        self.inx_code_target.clear();
         take(&mut self.edge_mp)
             .into_iter()
             .filter(|(_, edge)| edge.status == 0)
