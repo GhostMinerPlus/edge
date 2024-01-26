@@ -13,7 +13,7 @@ pub async fn execute(
     mem_table: &mut MemTable,
     script: &str,
 ) -> io::Result<String> {
-    let mut root = new_point();
+    let mut root = format!("${}", new_point());
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {
