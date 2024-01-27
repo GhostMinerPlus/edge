@@ -124,4 +124,19 @@ impl<'a> DataManager<'a> {
         commit(self).await?;
         dao::delete(self.conn, point).await
     }
+
+    pub async fn delete_code(&mut self, code: &str) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete_code(self.conn, code).await
+    }
+
+    pub async fn delete_code_without_source(&mut self, code: &str, source_code: &str) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete_code_without_source(self.conn, code, source_code).await
+    }
+
+    pub async fn delete_code_without_target(&mut self, code: &str, target_code: &str) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete_code_without_target(self.conn, code, target_code).await
+    }
 }

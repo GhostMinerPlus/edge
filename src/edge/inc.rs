@@ -193,3 +193,15 @@ pub async fn unwrap_value(dm: &mut DataManager<'_>, root: &str, value: &str) -> 
 pub async fn delete(dm: &mut DataManager<'_>, point: &str) -> io::Result<()> {
     dm.delete(point).await
 }
+
+pub async fn delete_code(dm: &mut DataManager<'_>, code: &str) -> io::Result<()> {
+    dm.delete_code(code).await
+}
+
+pub async fn delete_code_without_source(dm: &mut DataManager<'_>, code: &str, source_code: &str) -> io::Result<()> {
+    dm.delete_code_without_source(code, source_code).await
+}
+
+pub async fn delete_code_without_target(dm: &mut DataManager<'_>, code: &str, target_code: &str) -> io::Result<()> {
+    dm.delete_code_without_target(code, target_code).await
+}
