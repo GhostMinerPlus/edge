@@ -272,3 +272,12 @@ order by {order_v}"
     }
     Ok(arr)
 }
+
+pub async fn delete(conn: &mut MySqlConnection, point: &str) -> io::Result<()> {
+    sqlx::query("DELETE FROM edge_t WHERE source = ? OR code = ? OR target = ?")
+        .bind(point)
+        .execute(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(())
+}

@@ -32,6 +32,10 @@ pub async fn invoke_inc(
             inc::asign(dm, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
+        "delete" => {
+            inc::delete(dm, &inc.target).await?;
+            Ok(InvokeResult::Jump(1))
+        }
         "set" => {
             inc::set(dm, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))

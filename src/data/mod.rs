@@ -10,6 +10,10 @@ fn is_temp(source: &str, code: &str, target: &str) -> bool {
     source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
 }
 
+async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
+    dao::insert_edge_mp(dm.conn, &dm.mem_table.take()).await
+}
+
 // Public
 pub struct DataManager<'a> {
     conn: &'a mut MySqlConnection,
@@ -98,7 +102,7 @@ impl<'a> DataManager<'a> {
     }
 
     pub async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>> {
-        self.commit().await?;
+        commit(self).await?;
         dao::get_target_v(&mut self.conn, source, code).await
     }
 
@@ -108,11 +112,16 @@ impl<'a> DataManager<'a> {
         dimension_v: &Vec<String>,
         attr_v: &Vec<String>,
     ) -> io::Result<json::Array> {
-        self.commit().await?;
+        commit(self).await?;
         dao::get_list(&mut self.conn, root, dimension_v, attr_v).await
     }
 
     pub async fn commit(&mut self) -> io::Result<()> {
-        dao::insert_edge_mp(self.conn, &self.mem_table.take()).await
+        commit(self).await
+    }
+
+    pub async fn delete(&mut self, point: &str) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete(self.conn, point).await
     }
 }

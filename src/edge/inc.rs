@@ -58,7 +58,12 @@ pub async fn set(dm: &mut DataManager, root: &str, path: &str, value: &str) -> i
 }
 
 #[async_recursion::async_recursion]
-pub async fn asign(dm: &mut DataManager, root: &str, path: &str, value: &str) -> io::Result<String> {
+pub async fn asign(
+    dm: &mut DataManager,
+    root: &str,
+    path: &str,
+    value: &str,
+) -> io::Result<String> {
     if path.is_empty() {
         return Ok(String::new());
     }
@@ -183,4 +188,8 @@ pub async fn unwrap_value(dm: &mut DataManager<'_>, root: &str, value: &str) -> 
     } else {
         Ok(value.to_string())
     }
+}
+
+pub async fn delete(dm: &mut DataManager<'_>, point: &str) -> io::Result<()> {
+    dm.delete(point).await
 }
