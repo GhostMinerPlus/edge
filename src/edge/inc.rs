@@ -170,9 +170,9 @@ pub async fn append(
 }
 
 pub async fn dump(dm: &mut DataManager<'_>, target: &str) -> io::Result<String> {
-    let root = dm.get_target(target, "root").await?;
-    let dimension_v = dm.get_target_v(target, "dimension").await?;
-    let attr_v = dm.get_target_v(target, "attr").await?;
+    let root = dm.get_target(target, "$root").await?;
+    let dimension_v = dm.get_target_v(target, "$dimension").await?;
+    let attr_v = dm.get_target_v(target, "$attr").await?;
 
     let rs = dm.get_list(&root, &dimension_v, &attr_v).await?;
     Ok(json::stringify(rs))

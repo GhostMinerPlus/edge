@@ -41,14 +41,14 @@ pub async fn invoke_inc(
             Ok(InvokeResult::Jump(1))
         }
         "dc_ns" => {
-            let code = graph::get_target_anyway(dm, &inc.target, "code").await?;
-            let source_code = graph::get_target_anyway(dm, &inc.target, "source_code").await?;
+            let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
+            let source_code = graph::get_target_anyway(dm, &inc.target, "$source_code").await?;
             inc::delete_code_without_source(dm, &code, &source_code).await?;
             Ok(InvokeResult::Jump(1))
         }
         "dc_nt" => {
-            let code = graph::get_target_anyway(dm, &inc.target, "code").await?;
-            let target_code = graph::get_target_anyway(dm, &inc.target, "target_code").await?;
+            let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
+            let target_code = graph::get_target_anyway(dm, &inc.target, "$target_code").await?;
             inc::delete_code_without_target(dm, &code, &target_code).await?;
             Ok(InvokeResult::Jump(1))
         }
