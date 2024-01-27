@@ -58,7 +58,12 @@ pub async fn set(dm: &mut DataManager, root: &str, path: &str, value: &str) -> i
 }
 
 #[async_recursion::async_recursion]
-pub async fn asign(dm: &mut DataManager, root: &str, path: &str, value: &str) -> io::Result<String> {
+pub async fn asign(
+    dm: &mut DataManager,
+    root: &str,
+    path: &str,
+    value: &str,
+) -> io::Result<String> {
     if path.is_empty() {
         return Ok(String::new());
     }
@@ -165,9 +170,9 @@ pub async fn append(
 }
 
 pub async fn dump(dm: &mut DataManager<'_>, target: &str) -> io::Result<String> {
-    let root = dm.get_target(target, "root").await?;
-    let dimension_v = dm.get_target_v(target, "dimension").await?;
-    let attr_v = dm.get_target_v(target, "attr").await?;
+    let root = dm.get_target(target, "$root").await?;
+    let dimension_v = dm.get_target_v(target, "$dimension").await?;
+    let attr_v = dm.get_target_v(target, "$attr").await?;
 
     let rs = dm.get_list(&root, &dimension_v, &attr_v).await?;
     Ok(json::stringify(rs))
@@ -183,4 +188,20 @@ pub async fn unwrap_value(dm: &mut DataManager<'_>, root: &str, value: &str) -> 
     } else {
         Ok(value.to_string())
     }
+}
+
+pub async fn delete(dm: &mut DataManager<'_>, point: &str) -> io::Result<()> {
+    dm.delete(point).await
+}
+
+pub async fn delete_code(dm: &mut DataManager<'_>, code: &str) -> io::Result<()> {
+    dm.delete_code(code).await
+}
+
+pub async fn delete_code_without_source(dm: &mut DataManager<'_>, code: &str, source_code: &str) -> io::Result<()> {
+    dm.delete_code_without_source(code, source_code).await
+}
+
+pub async fn delete_code_without_target(dm: &mut DataManager<'_>, code: &str, target_code: &str) -> io::Result<()> {
+    dm.delete_code_without_target(code, target_code).await
 }

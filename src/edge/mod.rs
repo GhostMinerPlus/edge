@@ -32,6 +32,26 @@ pub async fn invoke_inc(
             inc::asign(dm, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
+        "delete" => {
+            inc::delete(dm, &inc.target).await?;
+            Ok(InvokeResult::Jump(1))
+        }
+        "dc" => {
+            inc::delete_code(dm, &inc.target).await?;
+            Ok(InvokeResult::Jump(1))
+        }
+        "dc_ns" => {
+            let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
+            let source_code = graph::get_target_anyway(dm, &inc.target, "$source_code").await?;
+            inc::delete_code_without_source(dm, &code, &source_code).await?;
+            Ok(InvokeResult::Jump(1))
+        }
+        "dc_nt" => {
+            let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
+            let target_code = graph::get_target_anyway(dm, &inc.target, "$target_code").await?;
+            inc::delete_code_without_target(dm, &code, &target_code).await?;
+            Ok(InvokeResult::Jump(1))
+        }
         "set" => {
             inc::set(dm, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
@@ -44,11 +64,7 @@ pub async fn invoke_inc(
     }
 }
 
-pub async fn unwrap_inc(
-    dm: &mut DataManager<'_>,
-    root: &str,
-    inc: &Inc,
-) -> io::Result<Inc> {
+pub async fn unwrap_inc(dm: &mut DataManager<'_>, root: &str, inc: &Inc) -> io::Result<Inc> {
     Ok(Inc {
         source: inc::unwrap_value(dm, root, &inc.source).await?,
         code: inc::unwrap_value(dm, root, &inc.code).await?,

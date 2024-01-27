@@ -10,6 +10,10 @@ fn is_temp(source: &str, code: &str, target: &str) -> bool {
     source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
 }
 
+async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
+    dao::insert_edge_mp(dm.conn, &dm.mem_table.take()).await
+}
+
 // Public
 pub struct DataManager<'a> {
     conn: &'a mut MySqlConnection,
@@ -62,7 +66,13 @@ impl<'a> DataManager<'a> {
         target: &str,
     ) -> io::Result<String> {
         if let Some((no, _)) = self.mem_table.get_target(source, code) {
-            Ok(self.mem_table.insert_edge(source, code, no + 1, target))
+            if is_temp(source, code, target) {
+                Ok(self
+                    .mem_table
+                    .insert_temp_edge(source, code, no + 1, target))
+            } else {
+                Ok(self.mem_table.insert_edge(source, code, no + 1, target))
+            }
         } else {
             if is_temp(source, code, target) {
                 Ok(self.mem_table.insert_temp_edge(source, code, 0, target))
@@ -98,8 +108,12 @@ impl<'a> DataManager<'a> {
     }
 
     pub async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>> {
-        self.commit().await?;
-        dao::get_target_v(&mut self.conn, source, code).await
+        if is_temp(source, code, "") {
+            Ok(self.mem_table.get_target_v_unchecked(source, code))
+        } else {
+            commit(self).await?;
+            dao::get_target_v(&mut self.conn, source, code).await
+        }
     }
 
     pub async fn get_list(
@@ -108,11 +122,39 @@ impl<'a> DataManager<'a> {
         dimension_v: &Vec<String>,
         attr_v: &Vec<String>,
     ) -> io::Result<json::Array> {
-        self.commit().await?;
+        commit(self).await?;
         dao::get_list(&mut self.conn, root, dimension_v, attr_v).await
     }
 
     pub async fn commit(&mut self) -> io::Result<()> {
-        dao::insert_edge_mp(self.conn, &self.mem_table.take()).await
+        commit(self).await
+    }
+
+    pub async fn delete(&mut self, point: &str) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete(self.conn, point).await
+    }
+
+    pub async fn delete_code(&mut self, code: &str) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete_code(self.conn, code).await
+    }
+
+    pub async fn delete_code_without_source(
+        &mut self,
+        code: &str,
+        source_code: &str,
+    ) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete_code_without_source(self.conn, code, source_code).await
+    }
+
+    pub async fn delete_code_without_target(
+        &mut self,
+        code: &str,
+        target_code: &str,
+    ) -> io::Result<()> {
+        commit(self).await?;
+        dao::delete_code_without_target(self.conn, code, target_code).await
     }
 }
