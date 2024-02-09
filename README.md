@@ -1,8 +1,9 @@
 # Edge
-A graph database using 'gasm' language
 
-# Quick start
+## What is Edge?
+A graph database.
 
+## Quick start
 ```sh
 edge [config.toml] --port 8005
 ```
@@ -17,5 +18,5 @@ db_url = "mysql://user:pass@host/database"
 ```
 Then it will serving at http://$ip:$port/$name
 
-# Usage
-curl http://$ip:$port/$name/execute -X POST --data "return any"
+## Usage
+curl http://$ip:$port/$name/execute -X POST --data "_ return any"
