@@ -1,13 +1,9 @@
 use std::io;
 
-use crate::{data::DataManager, mem_table::new_point};
+use crate::{data::AsDataManager, mem_table::new_point};
 
 #[async_recursion::async_recursion]
-async fn get(
-    dm: &mut DataManager<'_>,
-    root: &str,
-    path: &str,
-) -> io::Result<String> {
+async fn get(dm: &mut impl AsDataManager, root: &str, path: &str) -> io::Result<String> {
     if path.starts_with("->") || path.starts_with("<-") {
         let (arrow, path) = (&path[0..2], &path[2..]);
         let _v = path.find("->");
@@ -55,7 +51,7 @@ async fn get(
 
 // Public
 pub async fn get_or_empty(
-    dm: &mut DataManager<'_>,
+    dm: &mut impl AsDataManager,
     root: &str,
     path: &str,
 ) -> io::Result<String> {
@@ -69,7 +65,7 @@ pub async fn get_or_empty(
 }
 
 pub async fn get_target_anyway(
-    dm: &mut DataManager<'_>,
+    dm: &mut impl AsDataManager,
     source: &str,
     code: &str,
 ) -> io::Result<String> {
@@ -84,7 +80,7 @@ pub async fn get_target_anyway(
 }
 
 pub async fn get_source_anyway(
-    dm: &mut DataManager<'_>,
+    dm: &mut impl AsDataManager,
     code: &str,
     target: &str,
 ) -> io::Result<String> {

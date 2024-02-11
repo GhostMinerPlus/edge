@@ -15,6 +15,46 @@ async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
 }
 
 // Public
+pub trait AsDataManager: Send {
+    fn insert_edge(
+        &mut self,
+        source: &str,
+        code: &str,
+        no: u64,
+        target: &str,
+    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
+
+    fn set_target(&mut self, source: &str, code: &str, target: &str) -> impl std::future::Future<Output = io::Result<String>> + Send;
+
+    fn append_target(&mut self, source: &str, code: &str, target: &str)
+        -> impl std::future::Future<Output = io::Result<String>> + Send;
+
+    fn get_target(&mut self, source: &str, code: &str) -> impl std::future::Future<Output = io::Result<String>> + Send;
+
+    fn get_source(&mut self, code: &str, target: &str) -> impl std::future::Future<Output = io::Result<String>> + Send;
+
+    async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>>;
+
+    async fn get_list(
+        &mut self,
+        root: &str,
+        dimension_v: &Vec<String>,
+        attr_v: &Vec<String>,
+    ) -> io::Result<json::Array>;
+
+    async fn commit(&mut self) -> io::Result<()>;
+
+    async fn delete(&mut self, point: &str) -> io::Result<()>;
+
+    async fn delete_code(&mut self, code: &str) -> io::Result<()>;
+
+    async fn delete_code_without_source(&mut self, code: &str, source_code: &str)
+        -> io::Result<()>;
+
+    async fn delete_code_without_target(&mut self, code: &str, target_code: &str)
+        -> io::Result<()>;
+}
+
 pub struct DataManager<'a> {
     conn: &'a mut MySqlConnection,
     mem_table: &'a mut MemTable,
@@ -24,8 +64,10 @@ impl<'a> DataManager<'a> {
     pub fn new(conn: &'a mut MySqlConnection, mem_table: &'a mut MemTable) -> Self {
         Self { conn, mem_table }
     }
+}
 
-    pub async fn insert_edge(
+impl<'a> AsDataManager for DataManager<'a> {
+    async fn insert_edge(
         &mut self,
         source: &str,
         code: &str,
@@ -39,12 +81,7 @@ impl<'a> DataManager<'a> {
         }
     }
 
-    pub async fn set_target(
-        &mut self,
-        source: &str,
-        code: &str,
-        target: &str,
-    ) -> io::Result<String> {
+    async fn set_target(&mut self, source: &str, code: &str, target: &str) -> io::Result<String> {
         if let Some(id) = self.mem_table.set_target(source, code, target) {
             Ok(id)
         } else {
@@ -59,7 +96,7 @@ impl<'a> DataManager<'a> {
         }
     }
 
-    pub async fn append_target(
+    async fn append_target(
         &mut self,
         source: &str,
         code: &str,
@@ -85,7 +122,7 @@ impl<'a> DataManager<'a> {
         }
     }
 
-    pub async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {
+    async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {
         if let Some((_, target)) = self.mem_table.get_target(source, code) {
             return Ok(target);
         } else {
@@ -96,7 +133,7 @@ impl<'a> DataManager<'a> {
         }
     }
 
-    pub async fn get_source(&mut self, code: &str, target: &str) -> io::Result<String> {
+    async fn get_source(&mut self, code: &str, target: &str) -> io::Result<String> {
         if let Some(source) = self.mem_table.get_source(code, target) {
             return Ok(source);
         } else {
@@ -107,7 +144,7 @@ impl<'a> DataManager<'a> {
         }
     }
 
-    pub async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>> {
+    async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>> {
         if is_temp(source, code, "") {
             Ok(self.mem_table.get_target_v_unchecked(source, code))
         } else {
@@ -116,7 +153,7 @@ impl<'a> DataManager<'a> {
         }
     }
 
-    pub async fn get_list(
+    async fn get_list(
         &mut self,
         root: &str,
         dimension_v: &Vec<String>,
@@ -126,21 +163,21 @@ impl<'a> DataManager<'a> {
         dao::get_list(&mut self.conn, root, dimension_v, attr_v).await
     }
 
-    pub async fn commit(&mut self) -> io::Result<()> {
+    async fn commit(&mut self) -> io::Result<()> {
         commit(self).await
     }
 
-    pub async fn delete(&mut self, point: &str) -> io::Result<()> {
+    async fn delete(&mut self, point: &str) -> io::Result<()> {
         commit(self).await?;
         dao::delete(self.conn, point).await
     }
 
-    pub async fn delete_code(&mut self, code: &str) -> io::Result<()> {
+    async fn delete_code(&mut self, code: &str) -> io::Result<()> {
         commit(self).await?;
         dao::delete_code(self.conn, code).await
     }
 
-    pub async fn delete_code_without_source(
+    async fn delete_code_without_source(
         &mut self,
         code: &str,
         source_code: &str,
@@ -149,7 +186,7 @@ impl<'a> DataManager<'a> {
         dao::delete_code_without_source(self.conn, code, source_code).await
     }
 
-    pub async fn delete_code_without_target(
+    async fn delete_code_without_target(
         &mut self,
         code: &str,
         target_code: &str,

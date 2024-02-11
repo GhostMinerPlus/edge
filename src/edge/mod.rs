@@ -3,7 +3,7 @@ mod inc;
 use serde::Deserialize;
 use std::io;
 
-use crate::data::DataManager;
+use crate::data::AsDataManager;
 
 mod graph;
 
@@ -21,7 +21,7 @@ pub enum InvokeResult {
 }
 
 pub async fn invoke_inc(
-    dm: &mut DataManager<'_>,
+    dm: &mut impl AsDataManager,
     root: &mut String,
     inc: &Inc,
 ) -> io::Result<InvokeResult> {
@@ -64,7 +64,7 @@ pub async fn invoke_inc(
     }
 }
 
-pub async fn unwrap_inc(dm: &mut DataManager<'_>, root: &str, inc: &Inc) -> io::Result<Inc> {
+pub async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<Inc> {
     Ok(Inc {
         source: inc::unwrap_value(dm, root, &inc.source).await?,
         code: inc::unwrap_value(dm, root, &inc.code).await?,
@@ -73,7 +73,7 @@ pub async fn unwrap_inc(dm: &mut DataManager<'_>, root: &str, inc: &Inc) -> io::
 }
 
 pub async fn invoke_inc_v(
-    dm: &mut DataManager<'_>,
+    dm: &mut impl AsDataManager,
     root: &mut String,
     inc_v: &Vec<Inc>,
 ) -> io::Result<String> {

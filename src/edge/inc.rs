@@ -1,13 +1,18 @@
 use std::io;
 
 use crate::{
-    data::DataManager,
+    data::AsDataManager,
     edge::graph::{get_or_empty, get_source_anyway, get_target_anyway},
     mem_table::new_point,
 };
 
 #[async_recursion::async_recursion]
-pub async fn set(dm: &mut DataManager, root: &str, path: &str, value: &str) -> io::Result<String> {
+pub async fn set(
+    dm: &mut impl AsDataManager,
+    root: &str,
+    path: &str,
+    value: &str,
+) -> io::Result<String> {
     if path.is_empty() {
         return Ok(String::new());
     }
@@ -59,7 +64,7 @@ pub async fn set(dm: &mut DataManager, root: &str, path: &str, value: &str) -> i
 
 #[async_recursion::async_recursion]
 pub async fn asign(
-    dm: &mut DataManager,
+    dm: &mut impl AsDataManager,
     root: &str,
     path: &str,
     value: &str,
@@ -115,7 +120,7 @@ pub async fn asign(
 
 #[async_recursion::async_recursion]
 pub async fn append(
-    dm: &mut DataManager<'_>,
+    dm: &mut impl AsDataManager,
     root: &str,
     path: &str,
     value: &str,
@@ -169,7 +174,7 @@ pub async fn append(
     }
 }
 
-pub async fn dump(dm: &mut DataManager<'_>, target: &str) -> io::Result<String> {
+pub async fn dump(dm: &mut impl AsDataManager, target: &str) -> io::Result<String> {
     let root = dm.get_target(target, "$root").await?;
     let dimension_v = dm.get_target_v(target, "$dimension").await?;
     let attr_v = dm.get_target_v(target, "$attr").await?;
@@ -178,7 +183,11 @@ pub async fn dump(dm: &mut DataManager<'_>, target: &str) -> io::Result<String> 
     Ok(json::stringify(rs))
 }
 
-pub async fn unwrap_value(dm: &mut DataManager<'_>, root: &str, value: &str) -> io::Result<String> {
+pub async fn unwrap_value(
+    dm: &mut impl AsDataManager,
+    root: &str,
+    value: &str,
+) -> io::Result<String> {
     if value == "?" {
         Ok(new_point())
     } else if value.starts_with("\"") {
@@ -190,18 +199,26 @@ pub async fn unwrap_value(dm: &mut DataManager<'_>, root: &str, value: &str) -> 
     }
 }
 
-pub async fn delete(dm: &mut DataManager<'_>, point: &str) -> io::Result<()> {
+pub async fn delete(dm: &mut impl AsDataManager, point: &str) -> io::Result<()> {
     dm.delete(point).await
 }
 
-pub async fn delete_code(dm: &mut DataManager<'_>, code: &str) -> io::Result<()> {
+pub async fn delete_code(dm: &mut impl AsDataManager, code: &str) -> io::Result<()> {
     dm.delete_code(code).await
 }
 
-pub async fn delete_code_without_source(dm: &mut DataManager<'_>, code: &str, source_code: &str) -> io::Result<()> {
+pub async fn delete_code_without_source(
+    dm: &mut impl AsDataManager,
+    code: &str,
+    source_code: &str,
+) -> io::Result<()> {
     dm.delete_code_without_source(code, source_code).await
 }
 
-pub async fn delete_code_without_target(dm: &mut DataManager<'_>, code: &str, target_code: &str) -> io::Result<()> {
+pub async fn delete_code_without_target(
+    dm: &mut impl AsDataManager,
+    code: &str,
+    target_code: &str,
+) -> io::Result<()> {
     dm.delete_code_without_target(code, target_code).await
 }
