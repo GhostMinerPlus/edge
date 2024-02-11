@@ -3,7 +3,7 @@ use std::io;
 use sqlx::MySqlConnection;
 
 use crate::{
-    data::DataManager,
+    data::{AsDataManager, DataManager},
     edge,
     mem_table::{new_point, MemTable},
 };

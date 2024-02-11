@@ -11,10 +11,10 @@ use tokio::sync::Mutex;
 use crate::mem_table::MemTable;
 
 mod app;
-mod edge;
-mod service;
-mod mem_table;
 mod data;
+mod edge;
+mod mem_table;
+mod service;
 
 #[derive(Debug, Deserialize, Serialize, Clone, AsConfig)]
 struct Config {
@@ -84,7 +84,7 @@ async fn serve(config: &Config) -> io::Result<()> {
             pool: sqlx::Pool::connect(&config.db_url)
                 .await
                 .map_err(|e| Error::new(ErrorKind::InvalidData, e.to_string()))?,
-            mem_table: Mutex::new(MemTable::new())
+            mem_table: Mutex::new(MemTable::new()),
         }));
 
     // run our app with hyper, listening globally on port 3000

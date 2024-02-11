@@ -293,30 +293,42 @@ pub async fn delete_code(conn: &mut MySqlConnection, code: &str) -> io::Result<(
     Ok(())
 }
 
-pub async fn delete_code_without_source(conn: &mut MySqlConnection, code: &str, source_code: &str) -> io::Result<()> {
-    sqlx::query("delete from edge_t
+pub async fn delete_code_without_source(
+    conn: &mut MySqlConnection,
+    code: &str,
+    source_code: &str,
+) -> io::Result<()> {
+    sqlx::query(
+        "delete from edge_t
 where code = ?
 and not exists (
 select 1 from edge_t v where v.code = ? and v.target = source
-)")
-        .bind(code)
-        .bind(source_code)
-        .execute(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+)",
+    )
+    .bind(code)
+    .bind(source_code)
+    .execute(conn)
+    .await
+    .map_err(|e| Error::new(ErrorKind::Other, e))?;
     Ok(())
 }
 
-pub async fn delete_code_without_target(conn: &mut MySqlConnection, code: &str, target_code: &str) -> io::Result<()> {
-    sqlx::query("delete from edge_t
+pub async fn delete_code_without_target(
+    conn: &mut MySqlConnection,
+    code: &str,
+    target_code: &str,
+) -> io::Result<()> {
+    sqlx::query(
+        "delete from edge_t
 where code = ?
 and not exists (
 select 1 from edge_t v where v.code = ? and v.source = target
-)")
-        .bind(code)
-        .bind(target_code)
-        .execute(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+)",
+    )
+    .bind(code)
+    .bind(target_code)
+    .execute(conn)
+    .await
+    .map_err(|e| Error::new(ErrorKind::Other, e))?;
     Ok(())
 }
