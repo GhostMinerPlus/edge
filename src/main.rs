@@ -93,4 +93,3 @@ async fn serve(config: &Config) -> io::Result<()> {
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, app).await
 }
-
