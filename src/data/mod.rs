@@ -24,14 +24,31 @@ pub trait AsDataManager: Send {
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
-    fn set_target(&mut self, source: &str, code: &str, target: &str) -> impl std::future::Future<Output = io::Result<String>> + Send;
+    fn set_target(
+        &mut self,
+        source: &str,
+        code: &str,
+        target: &str,
+    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
-    fn append_target(&mut self, source: &str, code: &str, target: &str)
-        -> impl std::future::Future<Output = io::Result<String>> + Send;
+    fn append_target(
+        &mut self,
+        source: &str,
+        code: &str,
+        target: &str,
+    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
-    fn get_target(&mut self, source: &str, code: &str) -> impl std::future::Future<Output = io::Result<String>> + Send;
+    fn get_target(
+        &mut self,
+        source: &str,
+        code: &str,
+    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
-    fn get_source(&mut self, code: &str, target: &str) -> impl std::future::Future<Output = io::Result<String>> + Send;
+    fn get_source(
+        &mut self,
+        code: &str,
+        target: &str,
+    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
     async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>>;
 
