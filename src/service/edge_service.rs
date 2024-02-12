@@ -3,8 +3,8 @@ use std::io;
 use sqlx::MySqlConnection;
 
 use crate::{
-    data::{AsDataManager, DataManager},
-    edge,
+    data::DataManager,
+    edge::{self, AsEdgeEngine, EdgeEngine},
     mem_table::{new_point, MemTable},
 };
 
@@ -32,9 +32,10 @@ pub async fn execute(
             _ => todo!(),
         }
     }
-    let mut dm = DataManager::new(conn, mem_table);
-    let rs = edge::invoke_inc_v(&mut dm, &mut root, &inc_v).await?;
-    dm.commit().await?;
+    let dm = DataManager::new(conn, mem_table);
+    let mut edge_engine = EdgeEngine::new(dm);
+    let rs = edge_engine.invoke_inc_v(&mut root, &inc_v).await?;
+    edge_engine.commit().await?;
     Ok(rs)
 }
 
