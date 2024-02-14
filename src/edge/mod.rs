@@ -109,3 +109,114 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
         self.dm.commit().await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{data::AsDataManager, mem_table::new_point};
+
+    use super::{AsEdgeEngine, EdgeEngine};
+
+    struct FakeDataManager {}
+
+    impl AsDataManager for FakeDataManager {
+        fn insert_edge(
+            &mut self,
+            source: &str,
+            code: &str,
+            no: u64,
+            target: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+            async { todo!() }
+        }
+
+        fn set_target(
+            &mut self,
+            source: &str,
+            code: &str,
+            target: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+            async { todo!() }
+        }
+
+        fn append_target(
+            &mut self,
+            source: &str,
+            code: &str,
+            target: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+            async { todo!() }
+        }
+
+        fn get_target(
+            &mut self,
+            source: &str,
+            code: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+            async { todo!() }
+        }
+
+        fn get_source(
+            &mut self,
+            code: &str,
+            target: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+            async { todo!() }
+        }
+
+        async fn get_target_v(&mut self, source: &str, code: &str) -> std::io::Result<Vec<String>> {
+            todo!()
+        }
+
+        async fn get_list(
+            &mut self,
+            root: &str,
+            dimension_v: &Vec<String>,
+            attr_v: &Vec<String>,
+        ) -> std::io::Result<json::Array> {
+            todo!()
+        }
+
+        async fn commit(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        async fn delete(&mut self, point: &str) -> std::io::Result<()> {
+            todo!()
+        }
+
+        async fn delete_code(&mut self, code: &str) -> std::io::Result<()> {
+            todo!()
+        }
+
+        async fn delete_code_without_source(
+            &mut self,
+            code: &str,
+            source_code: &str,
+        ) -> std::io::Result<()> {
+            todo!()
+        }
+
+        async fn delete_code_without_target(
+            &mut self,
+            code: &str,
+            target_code: &str,
+        ) -> std::io::Result<()> {
+            todo!()
+        }
+    }
+
+    #[test]
+    fn test() {
+        let task = async {
+            let dm = FakeDataManager {};
+            let mut edge_engine = EdgeEngine::new(dm);
+            edge_engine.invoke_inc_v(&mut new_point(), &vec![]).await.unwrap();
+            edge_engine.commit().await.unwrap();
+        };
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(task);
+    }
+}
