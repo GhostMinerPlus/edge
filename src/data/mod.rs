@@ -50,26 +50,26 @@ pub trait AsDataManager: Send {
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
-    async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>>;
+    fn get_target_v(&mut self, source: &str, code: &str) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
 
-    async fn get_list(
+    fn get_list(
         &mut self,
         root: &str,
         dimension_v: &Vec<String>,
         attr_v: &Vec<String>,
-    ) -> io::Result<json::Array>;
+    ) -> impl std::future::Future<Output = io::Result<json::Array>> + Send;
 
     async fn commit(&mut self) -> io::Result<()>;
 
-    async fn delete(&mut self, point: &str) -> io::Result<()>;
+    fn delete(&mut self, point: &str) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
-    async fn delete_code(&mut self, code: &str) -> io::Result<()>;
+    fn delete_code(&mut self, code: &str) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
-    async fn delete_code_without_source(&mut self, code: &str, source_code: &str)
-        -> io::Result<()>;
+    fn delete_code_without_source(&mut self, code: &str, source_code: &str)
+        -> impl std::future::Future<Output = io::Result<()>> + Send;
 
-    async fn delete_code_without_target(&mut self, code: &str, target_code: &str)
-        -> io::Result<()>;
+    fn delete_code_without_target(&mut self, code: &str, target_code: &str)
+        -> impl std::future::Future<Output = io::Result<()>> + Send;
 }
 
 pub struct DataManager<'a> {

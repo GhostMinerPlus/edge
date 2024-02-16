@@ -3,10 +3,23 @@ mod inc;
 use serde::Deserialize;
 use std::io;
 
-use crate::data::AsDataManager;
+use crate::{data::AsDataManager, mem_table::new_point};
 
 mod graph;
 
+async fn dump_inc_v(dm: &mut impl AsDataManager, inc_h_v: &Vec<String>) -> io::Result<Vec<Inc>> {
+    let mut inc_v = Vec::with_capacity(inc_h_v.len());
+    for inc_h in inc_h_v {
+        inc_v.push(Inc {
+            source: dm.get_target(inc_h, "source").await?,
+            code: dm.get_target(inc_h, "code").await?,
+            target: dm.get_target(inc_h, "target").await?,
+        });
+    }
+    Ok(inc_v)
+}
+
+#[async_recursion::async_recursion]
 async fn invoke_inc(
     dm: &mut impl AsDataManager,
     root: &mut String,
@@ -47,7 +60,28 @@ async fn invoke_inc(
             inc::append(dm, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
-        _ => todo!(),
+        _ => {
+            dm.append_target(&inc.source, &inc.code, &inc.target).await?;
+            let listener_v = dm.get_target_v(&inc.code, "listener").await?;
+            for listener in &listener_v {
+                let inc_h_v = dm.get_target_v(&listener, "inc").await?;
+                let inc_v = dump_inc_v(dm, &inc_h_v).await?;
+
+                let mut new_root = format!("${}", new_point());
+                dm.append_target(&new_root, "$source", &inc.source).await?;
+                dm.append_target(&new_root, "$code", &inc.code).await?;
+                dm.append_target(&new_root, "$target", &inc.target).await?;
+                let mut pos = 0i32;
+                while (pos as usize) < inc_v.len() {
+                    let inc = unwrap_inc(dm, &mut new_root, &inc_v[pos as usize]).await?;
+                    match invoke_inc(dm, root, &inc).await? {
+                        InvokeResult::Jump(step) => pos += step,
+                        InvokeResult::Return(_) => break,
+                    }
+                }
+            }
+            Ok(InvokeResult::Jump(1))
+        }
     }
 }
 
@@ -210,7 +244,10 @@ mod tests {
         let task = async {
             let dm = FakeDataManager {};
             let mut edge_engine = EdgeEngine::new(dm);
-            edge_engine.invoke_inc_v(&mut new_point(), &vec![]).await.unwrap();
+            edge_engine
+                .invoke_inc_v(&mut new_point(), &vec![])
+                .await
+                .unwrap();
             edge_engine.commit().await.unwrap();
         };
         tokio::runtime::Builder::new_multi_thread()
