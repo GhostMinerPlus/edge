@@ -189,6 +189,7 @@ pub async fn unwrap_value(
     root: &str,
     value: &str,
 ) -> io::Result<String> {
+    log::debug!("{value}");
     if value == "?" {
         Ok(new_point())
     } else if value.starts_with("\"") {

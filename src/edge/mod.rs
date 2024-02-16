@@ -61,7 +61,8 @@ async fn invoke_inc(
             Ok(InvokeResult::Jump(1))
         }
         _ => {
-            dm.append_target(&inc.source, &inc.code, &inc.target).await?;
+            dm.append_target(&inc.source, &inc.code, &inc.target)
+                .await?;
             let listener_v = dm.get_target_v(&inc.code, "listener").await?;
             for listener in &listener_v {
                 let inc_h_v = dm.get_target_v(&listener, "inc").await?;
@@ -86,15 +87,17 @@ async fn invoke_inc(
 }
 
 async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<Inc> {
-    Ok(Inc {
+    let inc = Inc {
         source: inc::unwrap_value(dm, root, &inc.source).await?,
         code: inc::unwrap_value(dm, root, &inc.code).await?,
         target: inc::unwrap_value(dm, root, &inc.target).await?,
-    })
+    };
+    log::debug!("{:?}", inc);
+    Ok(inc)
 }
 
 // Public
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct Inc {
     pub source: String,
     pub code: String,
@@ -127,6 +130,7 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
         let mut pos = 0i32;
         let mut rs = String::new();
         while (pos as usize) < inc_v.len() {
+            log::debug!("pos: {},inc_v.len(): {}", pos, inc_v.len());
             let inc = unwrap_inc(&mut self.dm, &root, &inc_v[pos as usize]).await?;
             match invoke_inc(&mut self.dm, root, &inc).await? {
                 InvokeResult::Jump(step) => pos += step,
@@ -146,11 +150,24 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{data::AsDataManager, mem_table::new_point};
+    use crate::{
+        data::AsDataManager,
+        mem_table::{new_point, MemTable},
+    };
 
-    use super::{AsEdgeEngine, EdgeEngine};
+    use super::{AsEdgeEngine, EdgeEngine, Inc};
 
-    struct FakeDataManager {}
+    struct FakeDataManager {
+        mem_table: MemTable,
+    }
+
+    impl FakeDataManager {
+        pub fn new() -> Self {
+            Self {
+                mem_table: MemTable::new(),
+            }
+        }
+    }
 
     impl AsDataManager for FakeDataManager {
         fn insert_edge(
@@ -160,7 +177,8 @@ mod tests {
             no: u64,
             target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            async { todo!() }
+            let id = self.mem_table.insert_edge(source, code, no, target);
+            async { Ok(id) }
         }
 
         fn set_target(
@@ -169,7 +187,11 @@ mod tests {
             code: &str,
             target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            async { todo!() }
+            let id = self
+                .mem_table
+                .set_target(source, code, target)
+                .unwrap_or_default();
+            async { Ok(id) }
         }
 
         fn append_target(
@@ -178,7 +200,13 @@ mod tests {
             code: &str,
             target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            async { todo!() }
+            async {
+                if let Some((no, _)) = self.mem_table.get_target(source, code) {
+                    Ok(self.mem_table.insert_edge(source, code, no + 1, target))
+                } else {
+                    Ok(self.mem_table.insert_edge(source, code, 0, target))
+                }
+            }
         }
 
         fn get_target(
@@ -186,7 +214,13 @@ mod tests {
             source: &str,
             code: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            async { todo!() }
+            async {
+                if let Some((_, target)) = self.mem_table.get_target(source, code) {
+                    Ok(target)
+                } else {
+                    Ok(String::new())
+                }
+            }
         }
 
         fn get_source(
@@ -194,11 +228,17 @@ mod tests {
             code: &str,
             target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            async { todo!() }
+            async {
+                if let Some(source) = self.mem_table.get_source(code, target) {
+                    Ok(source)
+                } else {
+                    Ok(String::new())
+                }
+            }
         }
 
         async fn get_target_v(&mut self, source: &str, code: &str) -> std::io::Result<Vec<String>> {
-            todo!()
+            Ok(self.mem_table.get_target_v_unchecked(source, code))
         }
 
         async fn get_list(
@@ -215,11 +255,11 @@ mod tests {
         }
 
         async fn delete(&mut self, point: &str) -> std::io::Result<()> {
-            todo!()
+            Ok(())
         }
 
         async fn delete_code(&mut self, code: &str) -> std::io::Result<()> {
-            todo!()
+            Ok(())
         }
 
         async fn delete_code_without_source(
@@ -227,7 +267,7 @@ mod tests {
             code: &str,
             source_code: &str,
         ) -> std::io::Result<()> {
-            todo!()
+            Ok(())
         }
 
         async fn delete_code_without_target(
@@ -235,19 +275,38 @@ mod tests {
             code: &str,
             target_code: &str,
         ) -> std::io::Result<()> {
-            todo!()
+            Ok(())
         }
     }
 
     #[test]
     fn test() {
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("DEBUG"))
+        .init();
+
         let task = async {
-            let dm = FakeDataManager {};
+            let dm = FakeDataManager::new();
+            let mut root = new_point();
+            let inc_v = vec![
+                Inc {
+                    source: "aim".to_string(),
+                    code: "listener".to_string(),
+                    target: "test_listener".to_string(),
+                },
+                Inc {
+                    source: "test_listener".to_string(),
+                    code: "inc".to_string(),
+                    target: "test_listener_1".to_string(),
+                },
+                Inc {
+                    source: "edge".to_string(),
+                    code: "aim".to_string(),
+                    target: "target".to_string(),
+                },
+            ];
+
             let mut edge_engine = EdgeEngine::new(dm);
-            edge_engine
-                .invoke_inc_v(&mut new_point(), &vec![])
-                .await
-                .unwrap();
+            edge_engine.invoke_inc_v(&mut root, &inc_v).await.unwrap();
             edge_engine.commit().await.unwrap();
         };
         tokio::runtime::Builder::new_multi_thread()
