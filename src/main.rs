@@ -18,7 +18,7 @@ struct Config {
     db_url: String,
     thread_num: u8,
     log_level: String,
-    moon_server_v: Vec<String>,
+    moon_servers: Vec<String>,
 }
 
 impl Default for Config {
@@ -30,7 +30,7 @@ impl Default for Config {
             db_url: Default::default(),
             thread_num: 8,
             log_level: "INFO".to_string(),
-            moon_server_v: Vec::new(),
+            moon_servers: Vec::new(),
         }
     }
 }
@@ -63,7 +63,7 @@ fn main() -> io::Result<()> {
                 config.ip,
                 config.port,
                 config.name,
-                config.moon_server_v,
+                config.moon_servers,
                 config.db_url,
             )
             .run(),
