@@ -52,7 +52,6 @@ fn main() -> io::Result<()> {
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(&config.log_level))
         .init();
-    log::info!("{:?}", config);
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
