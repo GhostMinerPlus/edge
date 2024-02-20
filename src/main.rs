@@ -8,7 +8,6 @@ mod data;
 mod edge;
 mod mem_table;
 mod server;
-mod star;
 
 #[derive(Debug, Deserialize, Serialize, Clone, AsConfig)]
 struct Config {

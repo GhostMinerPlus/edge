@@ -1,11 +1,11 @@
 //! Server that provides services.
 
-use std::{io, sync::Arc, time::Duration};
+use std::{io, sync::Arc};
 
 use axum::{routing, Router};
-use tokio::{sync::Mutex, time};
+use tokio::sync::Mutex;
 
-use crate::{app, mem_table, star};
+use crate::{app, mem_table};
 
 mod service;
 
@@ -57,16 +57,6 @@ impl Server {
     }
 
     pub async fn run(self) -> io::Result<()> {
-        let name = self.name.clone();
-        let moon_server_v = self.moon_server_v.clone();
-        tokio::spawn(async move {
-            loop {
-                time::sleep(Duration::from_secs(10)).await;
-                if let Err(e) = star::report_uri(&name, self.port, &moon_server_v).await {
-                    log::error!("{e}");
-                }
-            }
-        });
         serve(&self.ip, self.port, &self.name, &self.db_url).await
     }
 }

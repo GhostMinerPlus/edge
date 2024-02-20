@@ -20,4 +20,3 @@ toml = "0.8.8"
 uuid = { version = "1.6.1", features = ["v4"] }
 earth = { git = "https://github.com/GhostMinerPlus/earth.git"  }
 rust_decimal = "1.33.1"
-pnet = "0.34.0"
