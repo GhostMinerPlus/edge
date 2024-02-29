@@ -36,13 +36,7 @@ impl MemTable {
         }
     }
 
-    pub fn append_exists_edge(
-        &mut self,
-        id: &str,
-        source: &str,
-        code: &str,
-        target: &str,
-    ) {
+    pub fn append_exists_edge(&mut self, id: &str, source: &str, code: &str, target: &str) {
         let edge = Edge {
             id: id.to_string(),
             source: source.to_string(),
@@ -147,20 +141,6 @@ impl MemTable {
         }
     }
 
-    pub fn set_target(&mut self, source: &str, code: &str, target: &str) -> Option<String> {
-        match self
-            .inx_source_code
-            .get(&(source.to_string(), code.to_string()))
-        {
-            Some(id_v) => {
-                let edge = self.edge_mp.get_mut(id_v.last().unwrap()).unwrap();
-                edge.target = target.to_string();
-                Some(edge.id.clone())
-            }
-            None => None,
-        }
-    }
-
     pub fn take(&mut self) -> HashMap<String, Edge> {
         self.inx_source_code.clear();
         self.inx_code_target.clear();
@@ -168,5 +148,17 @@ impl MemTable {
             .into_iter()
             .filter(|(_, edge)| edge.status == 0)
             .collect()
+    }
+
+    pub fn delete_edge_with_source_code(&mut self, source: &str, code: &str) {
+        if let Some(id_v) = self
+            .inx_source_code
+            .remove(&(source.to_string(), code.to_string()))
+        {
+            for id in &id_v {
+                let edge = self.edge_mp.remove(id).unwrap();
+                self.inx_code_target.remove(&(edge.code, edge.target));
+            }
+        }
     }
 }

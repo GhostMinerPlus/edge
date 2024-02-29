@@ -16,6 +16,7 @@ async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
 
 // Public
 pub trait AsDataManager: Send {
+    /// Insert a new edge
     fn insert_edge(
         &mut self,
         source: &str,
@@ -23,6 +24,7 @@ pub trait AsDataManager: Send {
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
+    /// Clear all edge with `source` and `code` and insert a new edge
     fn set_target(
         &mut self,
         source: &str,
@@ -30,18 +32,21 @@ pub trait AsDataManager: Send {
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
+    /// Get a target from `source->code`
     fn get_target(
         &mut self,
         source: &str,
         code: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
+    /// Get a source from `target<-code`
     fn get_source(
         &mut self,
         code: &str,
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
+    /// Get all targets from `source->code`
     fn get_target_v(
         &mut self,
         source: &str,
@@ -98,16 +103,13 @@ impl<'a> AsDataManager for DataManager<'a> {
     }
 
     async fn set_target(&mut self, source: &str, code: &str, target: &str) -> io::Result<String> {
-        if let Some(id) = self.mem_table.set_target(source, code, target) {
-            Ok(id)
+        self.mem_table.delete_edge_with_source_code(source, code);
+        if is_temp(source, code, target) {
+            Ok(self.mem_table.insert_temp_edge(source, code, target))
         } else {
-            if is_temp(source, code, target) {
-                Ok(self.mem_table.insert_temp_edge(source, code, target))
-            } else {
-                let id = dao::set_target(&mut self.conn, source, code, target).await?;
-                self.mem_table.append_exists_edge(&id, source, code, target);
-                Ok(id)
-            }
+            let id = dao::set_target(&mut self.conn, source, code, target).await?;
+            self.mem_table.append_exists_edge(&id, source, code, target);
+            Ok(id)
         }
     }
 

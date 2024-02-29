@@ -61,8 +61,7 @@ async fn invoke_inc(
             Ok(InvokeResult::Jump(1))
         }
         _ => {
-            dm.insert_edge(&inc.source, &inc.code, &inc.target)
-                .await?;
+            dm.insert_edge(&inc.source, &inc.code, &inc.target).await?;
             let listener_v = dm.get_target_v(&inc.code, "listener").await?;
             for listener in &listener_v {
                 let inc_h_v = dm.get_target_v(&listener, "inc").await?;
@@ -186,10 +185,8 @@ mod tests {
             code: &str,
             target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            let id = self
-                .mem_table
-                .set_target(source, code, target)
-                .unwrap_or_default();
+            self.mem_table.delete_edge_with_source_code(source, code);
+            let id = self.mem_table.insert_edge(source, code, target);
             async { Ok(id) }
         }
 
@@ -265,8 +262,7 @@ mod tests {
 
     #[test]
     fn test() {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("DEBUG"))
-        .init();
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("DEBUG")).init();
 
         let task = async {
             let dm = FakeDataManager::new();

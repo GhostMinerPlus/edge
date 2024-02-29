@@ -7,6 +7,20 @@ use sqlx::{MySqlConnection, Row};
 
 use crate::mem_table::{new_point, Edge};
 
+async fn delete_edge_with_source_code(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+) -> io::Result<()> {
+    sqlx::query("delete from edge_t where source = ? and code = ?")
+        .bind(source)
+        .bind(code)
+        .execute(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(())
+}
+
 // Public
 pub async fn insert_edge_mp(
     conn: &mut MySqlConnection,
@@ -104,6 +118,7 @@ pub async fn set_target(
     code: &str,
     target: &str,
 ) -> io::Result<String> {
+    delete_edge_with_source_code(conn, source, code).await?;
     let id = new_point();
     sqlx::query("insert into edge_t (id, source, code, target) values (?, ?, ?, ?)")
         .bind(&id)
