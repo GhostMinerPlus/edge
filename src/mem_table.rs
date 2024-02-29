@@ -17,7 +17,6 @@ pub struct Edge {
     pub id: String,
     pub source: String,
     pub code: String,
-    pub no: u64,
     pub target: String,
     status: u8,
 }
@@ -42,14 +41,12 @@ impl MemTable {
         id: &str,
         source: &str,
         code: &str,
-        no: u64,
         target: &str,
     ) {
         let edge = Edge {
             id: id.to_string(),
             source: source.to_string(),
             code: code.to_string(),
-            no,
             target: target.to_string(),
             status: 1,
         };
@@ -66,13 +63,12 @@ impl MemTable {
         );
     }
 
-    pub fn insert_edge(&mut self, source: &str, code: &str, no: u64, target: &str) -> String {
+    pub fn insert_edge(&mut self, source: &str, code: &str, target: &str) -> String {
         let id = new_point();
         let edge = Edge {
             id: id.clone(),
             source: source.to_string(),
             code: code.to_string(),
-            no,
             target: target.to_string(),
             status: 0,
         };
@@ -90,13 +86,12 @@ impl MemTable {
         id
     }
 
-    pub fn insert_temp_edge(&mut self, source: &str, code: &str, no: u64, target: &str) -> String {
+    pub fn insert_temp_edge(&mut self, source: &str, code: &str, target: &str) -> String {
         let id = new_point();
         let edge = Edge {
             id: id.clone(),
             source: source.to_string(),
             code: code.to_string(),
-            no,
             target: target.to_string(),
             status: 1,
         };
@@ -114,14 +109,14 @@ impl MemTable {
         id
     }
 
-    pub fn get_target(&self, source: &str, code: &str) -> Option<(u64, String)> {
+    pub fn get_target(&self, source: &str, code: &str) -> Option<String> {
         match self
             .inx_source_code
             .get(&(source.to_string(), code.to_string()))
         {
             Some(id_v) => {
                 let edge = &self.edge_mp[id_v.last().unwrap()];
-                Some((edge.no, edge.target.clone()))
+                Some(edge.target.clone())
             }
             None => None,
         }

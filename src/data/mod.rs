@@ -20,18 +20,10 @@ pub trait AsDataManager: Send {
         &mut self,
         source: &str,
         code: &str,
-        no: u64,
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
     fn set_target(
-        &mut self,
-        source: &str,
-        code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
-
-    fn append_target(
         &mut self,
         source: &str,
         code: &str,
@@ -50,7 +42,11 @@ pub trait AsDataManager: Send {
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
-    fn get_target_v(&mut self, source: &str, code: &str) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
+    fn get_target_v(
+        &mut self,
+        source: &str,
+        code: &str,
+    ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
 
     fn get_list(
         &mut self,
@@ -63,13 +59,22 @@ pub trait AsDataManager: Send {
 
     fn delete(&mut self, point: &str) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
-    fn delete_code(&mut self, code: &str) -> impl std::future::Future<Output = io::Result<()>> + Send;
+    fn delete_code(
+        &mut self,
+        code: &str,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
-    fn delete_code_without_source(&mut self, code: &str, source_code: &str)
-        -> impl std::future::Future<Output = io::Result<()>> + Send;
+    fn delete_code_without_source(
+        &mut self,
+        code: &str,
+        source_code: &str,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
-    fn delete_code_without_target(&mut self, code: &str, target_code: &str)
-        -> impl std::future::Future<Output = io::Result<()>> + Send;
+    fn delete_code_without_target(
+        &mut self,
+        code: &str,
+        target_code: &str,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 }
 
 pub struct DataManager<'a> {
@@ -84,17 +89,11 @@ impl<'a> DataManager<'a> {
 }
 
 impl<'a> AsDataManager for DataManager<'a> {
-    async fn insert_edge(
-        &mut self,
-        source: &str,
-        code: &str,
-        no: u64,
-        target: &str,
-    ) -> io::Result<String> {
+    async fn insert_edge(&mut self, source: &str, code: &str, target: &str) -> io::Result<String> {
         if is_temp(source, code, target) {
-            Ok(self.mem_table.insert_temp_edge(source, code, no, target))
+            Ok(self.mem_table.insert_temp_edge(source, code, target))
         } else {
-            Ok(self.mem_table.insert_edge(source, code, no, target))
+            Ok(self.mem_table.insert_edge(source, code, target))
         }
     }
 
@@ -103,49 +102,22 @@ impl<'a> AsDataManager for DataManager<'a> {
             Ok(id)
         } else {
             if is_temp(source, code, target) {
-                Ok(self.mem_table.insert_temp_edge(source, code, 0, target))
+                Ok(self.mem_table.insert_temp_edge(source, code, target))
             } else {
-                let (id, no) = dao::set_target(&mut self.conn, source, code, target).await?;
-                self.mem_table
-                    .append_exists_edge(&id, source, code, no, target);
-                Ok(id)
-            }
-        }
-    }
-
-    async fn append_target(
-        &mut self,
-        source: &str,
-        code: &str,
-        target: &str,
-    ) -> io::Result<String> {
-        if let Some((no, _)) = self.mem_table.get_target(source, code) {
-            if is_temp(source, code, target) {
-                Ok(self
-                    .mem_table
-                    .insert_temp_edge(source, code, no + 1, target))
-            } else {
-                Ok(self.mem_table.insert_edge(source, code, no + 1, target))
-            }
-        } else {
-            if is_temp(source, code, target) {
-                Ok(self.mem_table.insert_temp_edge(source, code, 0, target))
-            } else {
-                let (id, no) = dao::append_target(&mut self.conn, source, code, target).await?;
-                self.mem_table
-                    .append_exists_edge(&id, source, code, no, target);
+                let id = dao::set_target(&mut self.conn, source, code, target).await?;
+                self.mem_table.append_exists_edge(&id, source, code, target);
                 Ok(id)
             }
         }
     }
 
     async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {
-        if let Some((_, target)) = self.mem_table.get_target(source, code) {
+        if let Some(target) = self.mem_table.get_target(source, code) {
             return Ok(target);
         } else {
-            let (id, no, target) = dao::get_target(&mut self.conn, source, code).await?;
+            let (id, target) = dao::get_target(&mut self.conn, source, code).await?;
             self.mem_table
-                .append_exists_edge(&id, source, code, no, &target);
+                .append_exists_edge(&id, source, code, &target);
             Ok(target)
         }
     }
@@ -154,9 +126,9 @@ impl<'a> AsDataManager for DataManager<'a> {
         if let Some(source) = self.mem_table.get_source(code, target) {
             return Ok(source);
         } else {
-            let (id, no, source) = dao::get_source(&mut self.conn, code, target).await?;
+            let (id, source) = dao::get_source(&mut self.conn, code, target).await?;
             self.mem_table
-                .append_exists_edge(&id, &source, code, no, target);
+                .append_exists_edge(&id, &source, code, target);
             Ok(source)
         }
     }

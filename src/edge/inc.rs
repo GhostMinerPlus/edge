@@ -99,7 +99,7 @@ pub async fn asign(
             };
             asign(dm, &pt, path, value).await
         } else {
-            dm.insert_edge(root, path, 0, value).await
+            dm.insert_edge(root, path, value).await
         }
     } else {
         let _v = path.find("->");
@@ -155,7 +155,7 @@ pub async fn append(
             };
             append(dm, &pt, path, value).await
         } else {
-            dm.append_target(root, path, value).await
+            dm.insert_edge(root, path, value).await
         }
     } else {
         let _v = path.find("->");

@@ -61,7 +61,7 @@ async fn invoke_inc(
             Ok(InvokeResult::Jump(1))
         }
         _ => {
-            dm.append_target(&inc.source, &inc.code, &inc.target)
+            dm.insert_edge(&inc.source, &inc.code, &inc.target)
                 .await?;
             let listener_v = dm.get_target_v(&inc.code, "listener").await?;
             for listener in &listener_v {
@@ -69,9 +69,9 @@ async fn invoke_inc(
                 let inc_v = dump_inc_v(dm, &inc_h_v).await?;
 
                 let mut new_root = format!("${}", new_point());
-                dm.append_target(&new_root, "$source", &inc.source).await?;
-                dm.append_target(&new_root, "$code", &inc.code).await?;
-                dm.append_target(&new_root, "$target", &inc.target).await?;
+                dm.insert_edge(&new_root, "$source", &inc.source).await?;
+                dm.insert_edge(&new_root, "$code", &inc.code).await?;
+                dm.insert_edge(&new_root, "$target", &inc.target).await?;
                 let mut pos = 0i32;
                 while (pos as usize) < inc_v.len() {
                     let inc = unwrap_inc(dm, &mut new_root, &inc_v[pos as usize]).await?;
@@ -174,10 +174,9 @@ mod tests {
             &mut self,
             source: &str,
             code: &str,
-            no: u64,
             target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            let id = self.mem_table.insert_edge(source, code, no, target);
+            let id = self.mem_table.insert_edge(source, code, target);
             async { Ok(id) }
         }
 
@@ -194,28 +193,13 @@ mod tests {
             async { Ok(id) }
         }
 
-        fn append_target(
-            &mut self,
-            source: &str,
-            code: &str,
-            target: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            async {
-                if let Some((no, _)) = self.mem_table.get_target(source, code) {
-                    Ok(self.mem_table.insert_edge(source, code, no + 1, target))
-                } else {
-                    Ok(self.mem_table.insert_edge(source, code, 0, target))
-                }
-            }
-        }
-
         fn get_target(
             &mut self,
             source: &str,
             code: &str,
         ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
             async {
-                if let Some((_, target)) = self.mem_table.get_target(source, code) {
+                if let Some(target) = self.mem_table.get_target(source, code) {
                     Ok(target)
                 } else {
                     Ok(String::new())

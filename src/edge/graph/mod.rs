@@ -73,7 +73,7 @@ pub async fn get_target_anyway(
         Ok(target) => Ok(target),
         Err(_) => {
             let target = new_point();
-            dm.insert_edge(source, code, 0, &target).await?;
+            dm.insert_edge(source, code, &target).await?;
             Ok(target)
         }
     }
@@ -88,7 +88,7 @@ pub async fn get_source_anyway(
         Ok(source) => Ok(source),
         Err(_) => {
             let source = new_point();
-            dm.insert_edge(&source, code, 0, target).await?;
+            dm.insert_edge(&source, code, target).await?;
             Ok(source)
         }
     }
