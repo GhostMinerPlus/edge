@@ -26,12 +26,16 @@ async fn invoke_inc(
     inc: &Inc,
 ) -> io::Result<InvokeResult> {
     match inc.code.as_str() {
-        "return" => Ok(InvokeResult::Return(inc.target.clone())),
-        "dump" => Ok(InvokeResult::Return(inc::dump(dm, &inc.target).await?)),
-        "asign" => {
-            inc::asign(dm, &root, &inc.source, &inc.target).await?;
+        "clear" => {
+            inc::clear(dm, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
+        "insert" => {
+            dm.insert_edge(&inc.source, &inc.code, &inc.target).await?;
+            Ok(InvokeResult::Jump(1))
+        }
+        "return" => Ok(InvokeResult::Return(inc.target.clone())),
+        "dump" => Ok(InvokeResult::Return(inc::dump(dm, &inc.target).await?)),
         "delete" => {
             inc::delete(dm, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
@@ -50,14 +54,6 @@ async fn invoke_inc(
             let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
             let target_code = graph::get_target_anyway(dm, &inc.target, "$target_code").await?;
             inc::delete_code_without_target(dm, &code, &target_code).await?;
-            Ok(InvokeResult::Jump(1))
-        }
-        "set" => {
-            inc::set(dm, &root, &inc.source, &inc.target).await?;
-            Ok(InvokeResult::Jump(1))
-        }
-        "append" => {
-            inc::append(dm, &root, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
         _ => {
@@ -179,15 +175,13 @@ mod tests {
             async { Ok(id) }
         }
 
-        fn set_target(
+        fn clear(
             &mut self,
             source: &str,
             code: &str,
-            target: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+        ) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
             self.mem_table.delete_edge_with_source_code(source, code);
-            let id = self.mem_table.insert_edge(source, code, target);
-            async { Ok(id) }
+            async { Ok(()) }
         }
 
         fn get_target(
@@ -257,6 +251,15 @@ mod tests {
             target_code: &str,
         ) -> std::io::Result<()> {
             Ok(())
+        }
+
+        fn get_orderred_target_v(
+            &mut self,
+            source: &str,
+            code: &str,
+            order_by: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
+            async { todo!() }
         }
     }
 

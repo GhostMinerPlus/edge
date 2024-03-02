@@ -5,9 +5,10 @@ use std::{
 
 use sqlx::{MySqlConnection, Row};
 
-use crate::mem_table::{new_point, Edge};
+use crate::mem_table::Edge;
 
-async fn delete_edge_with_source_code(
+// Public
+pub async fn delete_edge_with_source_code(
     conn: &mut MySqlConnection,
     source: &str,
     code: &str,
@@ -21,7 +22,6 @@ async fn delete_edge_with_source_code(
     Ok(())
 }
 
-// Public
 pub async fn insert_edge_mp(
     conn: &mut MySqlConnection,
     edge_mp: &HashMap<String, Edge>,
@@ -93,6 +93,31 @@ pub async fn get_target_v(
     Ok(arr)
 }
 
+pub async fn get_orderred_target_v(
+    conn: &mut MySqlConnection,
+    source: &str,
+    code: &str,
+    order_by: &str,
+) -> io::Result<Vec<String>> {
+    let sql = format!("select t.target
+from edge_t t
+join (select * from edge_t where code = ?) {order_by}_v on {order_by}_v.source = t.target
+where source = ? and code = ?
+order by {order_by}_v.target");
+    let rs = sqlx::query(&sql)
+        .bind(order_by)
+        .bind(source)
+        .bind(code)
+        .fetch_all(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    let mut arr = Vec::new();
+    for row in rs {
+        arr.push(row.get(0));
+    }
+    Ok(arr)
+}
+
 pub async fn get_source(
     conn: &mut MySqlConnection,
     code: &str,
@@ -108,25 +133,6 @@ pub async fn get_source(
             _ => Error::new(ErrorKind::Other, e),
         })?;
     Ok((row.get(0), row.get(1)))
-}
-
-pub async fn set_target(
-    conn: &mut MySqlConnection,
-    source: &str,
-    code: &str,
-    target: &str,
-) -> io::Result<String> {
-    delete_edge_with_source_code(conn, source, code).await?;
-    let id = new_point();
-    sqlx::query("insert into edge_t (id, source, code, target) values (?, ?, ?, ?)")
-        .bind(&id)
-        .bind(source)
-        .bind(code)
-        .bind(target)
-        .execute(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    Ok(id)
 }
 
 pub async fn get_list(

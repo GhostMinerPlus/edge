@@ -25,12 +25,11 @@ pub trait AsDataManager: Send {
     ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
     /// Clear all edge with `source` and `code` and insert a new edge
-    fn set_target(
+    fn clear(
         &mut self,
         source: &str,
         code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
     /// Get a target from `source->code`
     fn get_target(
@@ -51,6 +50,14 @@ pub trait AsDataManager: Send {
         &mut self,
         source: &str,
         code: &str,
+    ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
+
+    /// Get all targets from `source->code`
+    fn get_orderred_target_v(
+        &mut self,
+        source: &str,
+        code: &str,
+        order_by: &str,
     ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
 
     fn get_list(
@@ -102,15 +109,9 @@ impl<'a> AsDataManager for DataManager<'a> {
         }
     }
 
-    async fn set_target(&mut self, source: &str, code: &str, target: &str) -> io::Result<String> {
+    async fn clear(&mut self, source: &str, code: &str) -> io::Result<()> {
         self.mem_table.delete_edge_with_source_code(source, code);
-        if is_temp(source, code, target) {
-            Ok(self.mem_table.insert_temp_edge(source, code, target))
-        } else {
-            let id = dao::set_target(&mut self.conn, source, code, target).await?;
-            self.mem_table.append_exists_edge(&id, source, code, target);
-            Ok(id)
-        }
+        dao::delete_edge_with_source_code(&mut self.conn, source, code).await
     }
 
     async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {
@@ -141,6 +142,20 @@ impl<'a> AsDataManager for DataManager<'a> {
         } else {
             commit(self).await?;
             dao::get_target_v(&mut self.conn, source, code).await
+        }
+    }
+
+    async fn get_orderred_target_v(
+        &mut self,
+        source: &str,
+        code: &str,
+        order_by: &str,
+    ) -> io::Result<Vec<String>> {
+        if is_temp(source, code, "") {
+            Ok(self.mem_table.get_target_v_unchecked(source, code))
+        } else {
+            commit(self).await?;
+            dao::get_orderred_target_v(&mut self.conn, source, code, order_by).await
         }
     }
 

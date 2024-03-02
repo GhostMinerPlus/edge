@@ -1,7 +1,7 @@
 # Edge
 
 ## What is Edge?
-A graph database.
+A data engine.
 
 ## Quick start
 ```sh
@@ -16,7 +16,19 @@ db_url = "mysql://user:pass@host/database"
 # thread_num = 8
 # log_level = "INFO"
 ```
-Then it will serving at http://$ip:$port/$name
+Then it will serve at http://$ip:$port/$name
 
 ## Usage
 curl http://$ip:$port/$name/execute -X POST --data "_ return any"
+
+## Script
+
+## Atomic code
+- set: clear all target then insert a target to "source->>code"
+- insert: insert a new target to "source->>code"
+- return: end the script and return a value
+- dump: end the script then dump a value and return the string
+- delete: delete a edge by id
+- dc
+- dc_ns
+- dc_nt

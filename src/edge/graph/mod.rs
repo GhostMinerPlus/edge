@@ -78,18 +78,3 @@ pub async fn get_target_anyway(
         }
     }
 }
-
-pub async fn get_source_anyway(
-    dm: &mut impl AsDataManager,
-    code: &str,
-    target: &str,
-) -> io::Result<String> {
-    match dm.get_source(code, target).await {
-        Ok(source) => Ok(source),
-        Err(_) => {
-            let source = new_point();
-            dm.insert_edge(&source, code, target).await?;
-            Ok(source)
-        }
-    }
-}
