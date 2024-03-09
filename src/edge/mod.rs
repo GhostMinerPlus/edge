@@ -27,23 +27,11 @@ async fn invoke_inc(
 ) -> io::Result<InvokeResult> {
     match inc.code.as_str() {
         "clear" => {
-            inc::clear(dm, &inc.source, &inc.target).await?;
-            Ok(InvokeResult::Jump(1))
-        }
-        "insert" => {
-            dm.insert_edge(&inc.source, &inc.code, &inc.target).await?;
+            dm.clear(&inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
         "return" => Ok(InvokeResult::Return(inc.target.clone())),
         "dump" => Ok(InvokeResult::Return(inc::dump(dm, &inc.target).await?)),
-        "delete" => {
-            inc::delete(dm, &inc.target).await?;
-            Ok(InvokeResult::Jump(1))
-        }
-        "dc" => {
-            inc::delete_code(dm, &inc.target).await?;
-            Ok(InvokeResult::Jump(1))
-        }
         "dc_ns" => {
             let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
             let source_code = graph::get_target_anyway(dm, &inc.target, "$source_code").await?;
@@ -82,12 +70,12 @@ async fn invoke_inc(
 }
 
 async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<Inc> {
+    let path = inc::unwrap_value(root, &inc.code).await?;
     let inc = Inc {
-        source: inc::unwrap_value(dm, root, &inc.source).await?,
-        code: inc::unwrap_value(dm, root, &inc.code).await?,
-        target: inc::unwrap_value(dm, root, &inc.target).await?,
+        source: inc::unwrap_value(root, &inc.source).await?,
+        code: dm.get_one_by_path(&path).await?,
+        target: inc::unwrap_value(root, &inc.target).await?,
     };
-    log::debug!("{:?}", inc);
     Ok(inc)
 }
 
@@ -229,14 +217,6 @@ mod tests {
             Ok(())
         }
 
-        async fn delete(&mut self, point: &str) -> std::io::Result<()> {
-            Ok(())
-        }
-
-        async fn delete_code(&mut self, code: &str) -> std::io::Result<()> {
-            Ok(())
-        }
-
         async fn delete_code_without_source(
             &mut self,
             code: &str,
@@ -253,12 +233,17 @@ mod tests {
             Ok(())
         }
 
-        fn get_orderred_target_v(
+        fn get_all_by_path(
             &mut self,
-            source: &str,
-            code: &str,
-            order_by: &str,
+            path: &str,
         ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
+            async { todo!() }
+        }
+
+        fn get_one_by_path(
+            &mut self,
+            path: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
             async { todo!() }
         }
     }

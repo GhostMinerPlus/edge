@@ -52,13 +52,17 @@ pub trait AsDataManager: Send {
         code: &str,
     ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
 
-    /// Get all targets from `source->code`
-    fn get_orderred_target_v(
+    /// Get all by path
+    fn get_all_by_path(
         &mut self,
-        source: &str,
-        code: &str,
-        order_by: &str,
+        path: &str,
     ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
+
+    /// Get all by path
+    fn get_one_by_path(
+        &mut self,
+        path: &str,
+    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
 
     fn get_list(
         &mut self,
@@ -68,13 +72,6 @@ pub trait AsDataManager: Send {
     ) -> impl std::future::Future<Output = io::Result<json::Array>> + Send;
 
     async fn commit(&mut self) -> io::Result<()>;
-
-    fn delete(&mut self, point: &str) -> impl std::future::Future<Output = io::Result<()>> + Send;
-
-    fn delete_code(
-        &mut self,
-        code: &str,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
     fn delete_code_without_source(
         &mut self,
@@ -145,20 +142,6 @@ impl<'a> AsDataManager for DataManager<'a> {
         }
     }
 
-    async fn get_orderred_target_v(
-        &mut self,
-        source: &str,
-        code: &str,
-        order_by: &str,
-    ) -> io::Result<Vec<String>> {
-        if is_temp(source, code, "") {
-            Ok(self.mem_table.get_target_v_unchecked(source, code))
-        } else {
-            commit(self).await?;
-            dao::get_orderred_target_v(&mut self.conn, source, code, order_by).await
-        }
-    }
-
     async fn get_list(
         &mut self,
         root: &str,
@@ -171,16 +154,6 @@ impl<'a> AsDataManager for DataManager<'a> {
 
     async fn commit(&mut self) -> io::Result<()> {
         commit(self).await
-    }
-
-    async fn delete(&mut self, point: &str) -> io::Result<()> {
-        commit(self).await?;
-        dao::delete(self.conn, point).await
-    }
-
-    async fn delete_code(&mut self, code: &str) -> io::Result<()> {
-        commit(self).await?;
-        dao::delete_code(self.conn, code).await
     }
 
     async fn delete_code_without_source(
@@ -199,5 +172,25 @@ impl<'a> AsDataManager for DataManager<'a> {
     ) -> io::Result<()> {
         commit(self).await?;
         dao::delete_code_without_target(self.conn, code, target_code).await
+    }
+
+    fn get_all_by_path(
+        &mut self,
+        path: &str,
+    ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send {
+        async {
+            commit(self).await?;
+            dao::get_all_by_path(self.conn, path).await
+        }
+    }
+
+    fn get_one_by_path(
+        &mut self,
+        path: &str,
+    ) -> impl std::future::Future<Output = io::Result<String>> + Send {
+        async {
+            commit(self).await?;
+            dao::get_one_by_path(self.conn, path).await
+        }
     }
 }
