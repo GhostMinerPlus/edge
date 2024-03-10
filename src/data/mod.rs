@@ -10,6 +10,10 @@ fn is_temp(source: &str, code: &str, target: &str) -> bool {
     source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
 }
 
+async fn flush(dm: &mut DataManager<'_>) -> io::Result<()> {
+    dao::insert_edge_mp(dm.conn, &dm.mem_table.take_some()).await
+}
+
 async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
     dao::insert_edge_mp(dm.conn, &dm.mem_table.take()).await
 }
@@ -67,6 +71,8 @@ pub trait AsDataManager: Send {
 
     async fn commit(&mut self) -> io::Result<()>;
 
+    async fn flush(&mut self) -> io::Result<()>;
+
     fn delete_code_without_source(
         &mut self,
         code: &str,
@@ -107,7 +113,7 @@ impl<'a> AsDataManager for DataManager<'a> {
 
     async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {
         if let Some(target) = self.mem_table.get_target(source, code) {
-            return Ok(target);
+            Ok(target)
         } else {
             let target = dao::get_target(&mut self.conn, source, code).await?;
             self.mem_table.append_exists_edge(source, code, &target);
@@ -117,7 +123,7 @@ impl<'a> AsDataManager for DataManager<'a> {
 
     async fn get_source(&mut self, code: &str, target: &str) -> io::Result<String> {
         if let Some(source) = self.mem_table.get_source(code, target) {
-            return Ok(source);
+            Ok(source)
         } else {
             let source = dao::get_source(&mut self.conn, code, target).await?;
             self.mem_table.append_exists_edge(&source, code, target);
@@ -129,7 +135,7 @@ impl<'a> AsDataManager for DataManager<'a> {
         if is_temp(source, code, "") {
             Ok(self.mem_table.get_target_v_unchecked(source, code))
         } else {
-            commit(self).await?;
+            flush(self).await?;
             dao::get_target_v(&mut self.conn, source, code).await
         }
     }
@@ -138,13 +144,13 @@ impl<'a> AsDataManager for DataManager<'a> {
         if is_temp("", code, target) {
             Ok(self.mem_table.get_source_v_unchecked(code, target))
         } else {
-            commit(self).await?;
+            flush(self).await?;
             dao::get_source_v(&mut self.conn, code, target).await
         }
     }
 
     async fn dump(&mut self, path: &str, item_v: &Vec<String>) -> io::Result<json::Array> {
-        commit(self).await?;
+        flush(self).await?;
         dao::dump(&mut self.conn, path, item_v).await
     }
 
@@ -152,12 +158,16 @@ impl<'a> AsDataManager for DataManager<'a> {
         commit(self).await
     }
 
+    async fn flush(&mut self) -> io::Result<()> {
+        flush(self).await
+    }
+
     async fn delete_code_without_source(
         &mut self,
         code: &str,
         source_code: &str,
     ) -> io::Result<()> {
-        commit(self).await?;
+        flush(self).await?;
         dao::delete_code_without_source(self.conn, code, source_code).await
     }
 
@@ -166,7 +176,7 @@ impl<'a> AsDataManager for DataManager<'a> {
         code: &str,
         target_code: &str,
     ) -> io::Result<()> {
-        commit(self).await?;
+        flush(self).await?;
         dao::delete_code_without_target(self.conn, code, target_code).await
     }
 }

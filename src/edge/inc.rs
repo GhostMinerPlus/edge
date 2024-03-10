@@ -34,6 +34,7 @@ pub struct Path {
 
 impl Path {
     pub fn from_str(path: &str) -> Self {
+        log::debug!("Path::from_str: {path}");
         if path.starts_with('"') {
             return Self {
                 root: path[1..path.len() - 1].to_string(),
@@ -125,13 +126,17 @@ pub async fn clear(dm: &mut impl AsDataManager, source: &str, target: &str) -> i
 
 pub async fn dump(dm: &mut impl AsDataManager, source: &str, target: &str) -> io::Result<()> {
     let source_v = get_all_by_path(dm, Path::from_str(source)).await?;
+    let target_v = get_all_by_path(dm, Path::from_str(target)).await?;
     for source in &source_v {
-        let path = dm.get_target(target, "$path").await?;
-        let item_v = dm.get_target_v(target, "$item").await?;
+        for target in &target_v {
+            log::debug!("dump: {source} {target}");
+            let path = dm.get_target(target, "$path").await?;
+            let item_v = dm.get_target_v(target, "$item").await?;
 
-        let rs = dm.dump(&path, &item_v).await?;
-        dm.insert_edge(source, "$result", &json::stringify(rs))
-            .await?;
+            let rs = dm.dump(&path, &item_v).await?;
+            dm.insert_edge(source, "$result", &json::stringify(rs))
+                .await?;
+        }
     }
     Ok(())
 }
@@ -141,10 +146,12 @@ pub async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
         Ok(new_point())
     } else if value == "$" {
         Ok(root.to_string())
+    } else if value.starts_with("$<-") {
+        Ok(format!("{root}{}", &value[1..]))
+    } else if value.starts_with("$->") {
+        Ok(format!("{root}{}", &value[1..]))
     } else {
-        Ok(value
-            .replace("$->", &format!("{root}->"))
-            .replace("$<-", &format!("{root}<-")))
+        Ok(value.to_string())
     }
 }
 

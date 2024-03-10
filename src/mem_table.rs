@@ -13,11 +13,12 @@ pub fn new_point() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
+#[derive(Clone)]
 pub struct Edge {
     pub source: String,
     pub code: String,
     pub target: String,
-    status: u8,
+    is_temp: bool,
 }
 
 pub struct MemTable {
@@ -41,7 +42,7 @@ impl MemTable {
             source: source.to_string(),
             code: code.to_string(),
             target: target.to_string(),
-            status: 1,
+            is_temp: true,
         };
         self.edge_mp.insert(uuid.to_string(), edge);
         insert(
@@ -62,7 +63,7 @@ impl MemTable {
             source: source.to_string(),
             code: code.to_string(),
             target: target.to_string(),
-            status: 0,
+            is_temp: false,
         };
         self.edge_mp.insert(uuid.clone(), edge);
         insert(
@@ -84,7 +85,7 @@ impl MemTable {
             source: source.to_string(),
             code: code.to_string(),
             target: target.to_string(),
-            status: 1,
+            is_temp: true,
         };
         self.edge_mp.insert(uuid.clone(), edge);
         insert(
@@ -158,8 +159,30 @@ impl MemTable {
         self.inx_code_target.clear();
         take(&mut self.edge_mp)
             .into_iter()
-            .filter(|(_, edge)| edge.status == 0)
+            .filter(|(_, edge)| !edge.is_temp)
             .collect()
+    }
+
+    pub fn take_some(&mut self) -> HashMap<String, Edge> {
+        let edge_mp: HashMap<String, Edge> = self
+            .edge_mp
+            .clone()
+            .into_iter()
+            .filter(|(_, edge)| edge.is_temp)
+            .collect();
+
+        self.inx_source_code.clear();
+        self.inx_code_target.clear();
+        let r = take(&mut self.edge_mp)
+            .into_iter()
+            .filter(|(_, edge)| !edge.is_temp)
+            .collect();
+
+        for (_, edge) in &edge_mp {
+            self.insert_temp_edge(&edge.source, &edge.code, &edge.target);
+        }
+
+        r
     }
 
     pub fn delete_edge_with_source_code(&mut self, source: &str, code: &str) {

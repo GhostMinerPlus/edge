@@ -23,6 +23,7 @@ async fn invoke_inc(
     root: &mut String,
     inc: &Inc,
 ) -> io::Result<InvokeResult> {
+    log::debug!("invoke_inc: {:?}", inc);
     match inc.code.as_str() {
         "clear" => {
             inc::clear(dm, &inc.source, &inc.target).await?;
@@ -41,25 +42,36 @@ async fn invoke_inc(
             Ok(InvokeResult::Jump(1))
         }
         _ => {
-            dm.insert_edge(&inc.source, &inc.code, &inc.target).await?;
-            let listener_v = dm.get_target_v(&inc.code, "listener").await?;
-            for listener in &listener_v {
-                let inc_h_v = dm.get_target_v(&listener, "inc").await?;
-                let inc_v = dump_inc_v(dm, &inc_h_v).await?;
+            let source_v = inc::get_all_by_path(dm, Path::from_str(&inc.source)).await?;
+            log::debug!("unwraped {} to {:?}", inc.source, source_v);
+            let target_v = inc::get_all_by_path(dm, Path::from_str(&inc.target)).await?;
+            log::debug!("unwraped {} to {:?}", inc.target, target_v);
 
-                let mut new_root = format!("${}", new_point());
-                dm.insert_edge(&new_root, "$source", &inc.source).await?;
-                dm.insert_edge(&new_root, "$code", &inc.code).await?;
-                dm.insert_edge(&new_root, "$target", &inc.target).await?;
-                let mut pos = 0i32;
-                while (pos as usize) < inc_v.len() {
-                    let inc = unwrap_inc(dm, &mut new_root, &inc_v[pos as usize]).await?;
-                    match invoke_inc(dm, root, &inc).await? {
-                        InvokeResult::Jump(step) => pos += step,
-                        InvokeResult::Return(_) => break,
+            for source in &source_v {
+                for target in &target_v {
+                    log::debug!("inserting an edge: {source} {} {target}", inc.code);
+                    dm.insert_edge(source, &inc.code, target).await?;
+                    let listener_v = dm.get_target_v(&inc.code, "listener").await?;
+                    for listener in &listener_v {
+                        let inc_h_v = dm.get_target_v(&listener, "inc").await?;
+                        let inc_v = dump_inc_v(dm, &inc_h_v).await?;
+
+                        let mut new_root = format!("${}", new_point());
+                        dm.insert_edge(&new_root, "$source", source).await?;
+                        dm.insert_edge(&new_root, "$code", &inc.code).await?;
+                        dm.insert_edge(&new_root, "$target", target).await?;
+                        let mut pos = 0i32;
+                        while (pos as usize) < inc_v.len() {
+                            let inc = unwrap_inc(dm, &mut new_root, &inc_v[pos as usize]).await?;
+                            match invoke_inc(dm, root, &inc).await? {
+                                InvokeResult::Jump(step) => pos += step,
+                                InvokeResult::Return(_) => break,
+                            }
+                        }
                     }
                 }
             }
+
             Ok(InvokeResult::Jump(1))
         }
     }
@@ -251,6 +263,10 @@ mod tests {
             _target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
             async { todo!() }
+        }
+        
+        async fn flush(&mut self) -> std::io::Result<()> {
+            todo!()
         }
     }
 
