@@ -220,26 +220,6 @@ order by {last_dimension}_t.id"
     Ok(arr)
 }
 
-pub async fn delete(conn: &mut MySqlConnection, point: &str) -> io::Result<()> {
-    sqlx::query("DELETE FROM edge_t WHERE source = ? OR code = ? OR target = ?")
-        .bind(point)
-        .bind(point)
-        .bind(point)
-        .execute(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    Ok(())
-}
-
-pub async fn delete_code(conn: &mut MySqlConnection, code: &str) -> io::Result<()> {
-    sqlx::query("delete from edge_t where code = ?")
-        .bind(code)
-        .execute(conn)
-        .await
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    Ok(())
-}
-
 pub async fn delete_code_without_source(
     conn: &mut MySqlConnection,
     code: &str,

@@ -212,9 +212,9 @@ mod tests {
 
         async fn get_list(
             &mut self,
-            root: &str,
-            dimension_v: &Vec<String>,
-            attr_v: &Vec<String>,
+            _root: &str,
+            _dimension_v: &Vec<String>,
+            _attr_v: &Vec<String>,
         ) -> std::io::Result<json::Array> {
             todo!()
         }
@@ -225,24 +225,24 @@ mod tests {
 
         async fn delete_code_without_source(
             &mut self,
-            code: &str,
-            source_code: &str,
+            _code: &str,
+            _source_code: &str,
         ) -> std::io::Result<()> {
             Ok(())
         }
 
         async fn delete_code_without_target(
             &mut self,
-            code: &str,
-            target_code: &str,
+            _code: &str,
+            _target_code: &str,
         ) -> std::io::Result<()> {
             Ok(())
         }
 
         fn get_source_v(
             &mut self,
-            code: &str,
-            target: &str,
+            _code: &str,
+            _target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
             async { todo!() }
         }

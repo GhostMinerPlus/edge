@@ -76,7 +76,10 @@ pub async fn get_target_anyway(
 }
 
 #[async_recursion::async_recursion]
-pub async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Result<Vec<String>> {
+pub async fn get_all_by_path(
+    dm: &mut impl AsDataManager,
+    mut path: Path,
+) -> io::Result<Vec<String>> {
     if path.step_v.is_empty() {
         return Ok(vec![path.root.clone()]);
     }
