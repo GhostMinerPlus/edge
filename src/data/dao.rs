@@ -32,7 +32,7 @@ pub async fn insert_edge_mp(
     log::info!("commit edge_mp: {}", edge_mp.len());
     let value_v = edge_mp
         .into_iter()
-        .map(|_| format!("(?,?,?,?,?)"))
+        .map(|_| format!("(?,?,?)"))
         .reduce(|acc, item| {
             if acc.is_empty() {
                 item
@@ -41,11 +41,10 @@ pub async fn insert_edge_mp(
             }
         })
         .unwrap();
-    let sql = format!("insert into edge_t (id,source,code,target) values {value_v}");
+    let sql = format!("insert into edge_t (source,code,target) values {value_v}");
     let mut statement = sqlx::query(&sql);
     for (_, edge) in edge_mp {
         statement = statement
-            .bind(&edge.id)
             .bind(&edge.source)
             .bind(&edge.code)
             .bind(&edge.target);
@@ -62,9 +61,9 @@ pub async fn get_target(
     conn: &mut MySqlConnection,
     source: &str,
     code: &str,
-) -> io::Result<(String, String)> {
+) -> io::Result<String> {
     let row =
-        sqlx::query("select id, target from edge_t where source=? and code=?  order by id limit 1")
+        sqlx::query("select target from edge_t where source=? and code=?  order by id limit 1")
             .bind(source)
             .bind(code)
             .fetch_one(conn)
@@ -73,7 +72,7 @@ pub async fn get_target(
                 sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
                 _ => Error::new(ErrorKind::Other, e),
             })?;
-    Ok((row.get(0), row.get(1)))
+    Ok(row.get(0))
 }
 
 pub async fn get_target_v(
@@ -116,9 +115,9 @@ pub async fn get_source(
     conn: &mut MySqlConnection,
     code: &str,
     target: &str,
-) -> io::Result<(String, String)> {
+) -> io::Result<String> {
     let row =
-        sqlx::query("select id, source from edge_t where code=? and target=?  order by id limit 1")
+        sqlx::query("select source from edge_t where code=? and target=?  order by id limit 1")
             .bind(code)
             .bind(target)
             .fetch_one(conn)
@@ -127,7 +126,7 @@ pub async fn get_source(
                 sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
                 _ => Error::new(ErrorKind::Other, e),
             })?;
-    Ok((row.get(0), row.get(1)))
+    Ok(row.get(0))
 }
 
 pub async fn get_list(

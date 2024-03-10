@@ -110,9 +110,9 @@ impl<'a> AsDataManager for DataManager<'a> {
         if let Some(target) = self.mem_table.get_target(source, code) {
             return Ok(target);
         } else {
-            let (id, target) = dao::get_target(&mut self.conn, source, code).await?;
+            let target = dao::get_target(&mut self.conn, source, code).await?;
             self.mem_table
-                .append_exists_edge(&id, source, code, &target);
+                .append_exists_edge(source, code, &target);
             Ok(target)
         }
     }
@@ -121,9 +121,9 @@ impl<'a> AsDataManager for DataManager<'a> {
         if let Some(source) = self.mem_table.get_source(code, target) {
             return Ok(source);
         } else {
-            let (id, source) = dao::get_source(&mut self.conn, code, target).await?;
+            let source = dao::get_source(&mut self.conn, code, target).await?;
             self.mem_table
-                .append_exists_edge(&id, &source, code, target);
+                .append_exists_edge(&source, code, target);
             Ok(source)
         }
     }
