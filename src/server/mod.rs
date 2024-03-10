@@ -35,23 +35,15 @@ pub struct Server {
     ip: String,
     name: String,
     port: u16,
-    moon_server_v: Vec<String>,
     db_url: String,
 }
 
 impl Server {
-    pub fn new(
-        ip: String,
-        port: u16,
-        name: String,
-        moon_server_v: Vec<String>,
-        db_url: String,
-    ) -> Self {
+    pub fn new(ip: String, port: u16, name: String, db_url: String) -> Self {
         Self {
             ip,
             port,
             name,
-            moon_server_v,
             db_url,
         }
     }

@@ -44,7 +44,7 @@ pub async fn http_execute(
     })()
     .await
     {
-        Ok(r) => (StatusCode::OK, r),
+        Ok(r) => (StatusCode::OK, serde_json::to_string(&r).unwrap()),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
 }
