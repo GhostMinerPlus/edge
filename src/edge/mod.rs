@@ -5,8 +5,6 @@ use std::io;
 
 use crate::{data::AsDataManager, mem_table::new_point};
 
-use self::inc::Path;
-
 async fn dump_inc_v(dm: &mut impl AsDataManager, inc_h_v: &Vec<String>) -> io::Result<Vec<Inc>> {
     let mut inc_v = Vec::with_capacity(inc_h_v.len());
     for inc_h in inc_h_v {
@@ -30,18 +28,16 @@ async fn invoke_inc(
             inc::clear(dm, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
-        "return" => Ok(InvokeResult::Return(inc.target.clone())),
-        "dump" => Ok(InvokeResult::Return(inc::dump(dm, &inc.target).await?)),
-        "dc_ns" => {
-            let code = inc::get_target_anyway(dm, &inc.target, "$code").await?;
-            let source_code = inc::get_target_anyway(dm, &inc.target, "$source_code").await?;
-            inc::delete_code_without_source(dm, &code, &source_code).await?;
+        "return" => {
+            let target_v = inc::get_all_by_path(dm, Path::from_str(&inc.target)).await?;
+            Ok(InvokeResult::Return(target_v))
+        }
+        "dump" => {
+            inc::dump(dm, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
-        "dc_nt" => {
-            let code = inc::get_target_anyway(dm, &inc.target, "$code").await?;
-            let target_code = inc::get_target_anyway(dm, &inc.target, "$target_code").await?;
-            inc::delete_code_without_target(dm, &code, &target_code).await?;
+        "dc_ns" => {
+            inc::delete_code_without_source(dm, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
         _ => {
@@ -86,6 +82,8 @@ async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::R
 }
 
 // Public
+pub use self::inc::Path;
+
 #[derive(Clone, Deserialize, Debug)]
 pub struct Inc {
     pub source: String,
@@ -95,11 +93,15 @@ pub struct Inc {
 
 pub enum InvokeResult {
     Jump(i32),
-    Return(String),
+    Return(Vec<String>),
 }
 
 pub trait AsEdgeEngine {
-    async fn invoke_inc_v(&mut self, root: &mut String, inc_v: &Vec<Inc>) -> io::Result<String>;
+    async fn invoke_inc_v(
+        &mut self,
+        root: &mut String,
+        inc_v: &Vec<Inc>,
+    ) -> io::Result<Vec<String>>;
 
     async fn commit(&mut self) -> io::Result<()>;
 }
@@ -115,11 +117,16 @@ impl<DM: AsDataManager> EdgeEngine<DM> {
 }
 
 impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
-    async fn invoke_inc_v(&mut self, root: &mut String, inc_v: &Vec<Inc>) -> io::Result<String> {
+    async fn invoke_inc_v(
+        &mut self,
+        root: &mut String,
+        inc_v: &Vec<Inc>,
+    ) -> io::Result<Vec<String>> {
         let mut pos = 0i32;
-        let mut rs = String::new();
+        let mut rs = Vec::new();
+        log::debug!("inc_v.len(): {}", inc_v.len());
         while (pos as usize) < inc_v.len() {
-            log::debug!("pos: {},inc_v.len(): {}", pos, inc_v.len());
+            log::debug!("pos: {}", pos);
             let inc = unwrap_inc(&mut self.dm, &root, &inc_v[pos as usize]).await?;
             match invoke_inc(&mut self.dm, root, &inc).await? {
                 InvokeResult::Jump(step) => pos += step,
@@ -210,11 +217,10 @@ mod tests {
             Ok(self.mem_table.get_target_v_unchecked(source, code))
         }
 
-        async fn get_list(
+        async fn dump(
             &mut self,
-            _root: &str,
-            _dimension_v: &Vec<String>,
-            _attr_v: &Vec<String>,
+            _path: &str,
+            _item_v: &Vec<String>,
         ) -> std::io::Result<json::Array> {
             todo!()
         }
@@ -250,8 +256,6 @@ mod tests {
 
     #[test]
     fn test() {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("DEBUG")).init();
-
         let task = async {
             let dm = FakeDataManager::new();
             let mut root = new_point();
@@ -271,11 +275,18 @@ mod tests {
                     code: "aim".to_string(),
                     target: "target".to_string(),
                 },
+                Inc {
+                    source: "$".to_string(),
+                    code: "return".to_string(),
+                    target: "edge->aim".to_string(),
+                },
             ];
 
             let mut edge_engine = EdgeEngine::new(dm);
-            edge_engine.invoke_inc_v(&mut root, &inc_v).await.unwrap();
+            let rs = edge_engine.invoke_inc_v(&mut root, &inc_v).await.unwrap();
             edge_engine.commit().await.unwrap();
+            assert_eq!(rs.len(), 1);
+            assert_eq!(rs[0], "target");
         };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

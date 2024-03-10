@@ -59,11 +59,10 @@ pub trait AsDataManager: Send {
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
 
-    fn get_list(
+    fn dump(
         &mut self,
-        root: &str,
-        dimension_v: &Vec<String>,
-        attr_v: &Vec<String>,
+        path: &str,
+        item_v: &Vec<String>,
     ) -> impl std::future::Future<Output = io::Result<json::Array>> + Send;
 
     async fn commit(&mut self) -> io::Result<()>;
@@ -111,8 +110,7 @@ impl<'a> AsDataManager for DataManager<'a> {
             return Ok(target);
         } else {
             let target = dao::get_target(&mut self.conn, source, code).await?;
-            self.mem_table
-                .append_exists_edge(source, code, &target);
+            self.mem_table.append_exists_edge(source, code, &target);
             Ok(target)
         }
     }
@@ -122,8 +120,7 @@ impl<'a> AsDataManager for DataManager<'a> {
             return Ok(source);
         } else {
             let source = dao::get_source(&mut self.conn, code, target).await?;
-            self.mem_table
-                .append_exists_edge(&source, code, target);
+            self.mem_table.append_exists_edge(&source, code, target);
             Ok(source)
         }
     }
@@ -146,14 +143,9 @@ impl<'a> AsDataManager for DataManager<'a> {
         }
     }
 
-    async fn get_list(
-        &mut self,
-        root: &str,
-        dimension_v: &Vec<String>,
-        attr_v: &Vec<String>,
-    ) -> io::Result<json::Array> {
+    async fn dump(&mut self, path: &str, item_v: &Vec<String>) -> io::Result<json::Array> {
         commit(self).await?;
-        dao::get_list(&mut self.conn, root, dimension_v, attr_v).await
+        dao::dump(&mut self.conn, path, item_v).await
     }
 
     async fn commit(&mut self) -> io::Result<()> {

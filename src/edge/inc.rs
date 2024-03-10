@@ -20,20 +20,26 @@ fn find_arrrow(path: &str) -> usize {
     }
 }
 
+// Public
 #[derive(Clone)]
-struct Step {
-    arrow: String,
-    code: String,
+pub struct Step {
+    pub arrow: String,
+    pub code: String,
 }
 
-// Public
 pub struct Path {
-    root: String,
-    step_v: Vec<Step>,
+    pub root: String,
+    pub step_v: Vec<Step>,
 }
 
 impl Path {
     pub fn from_str(path: &str) -> Self {
+        if path.starts_with('"') {
+            return Self {
+                root: path[1..path.len() - 1].to_string(),
+                step_v: Vec::new(),
+            };
+        }
         let mut s = find_arrrow(path);
 
         let root = path[0..s].to_string();
@@ -106,9 +112,9 @@ pub async fn get_all_by_path(
     Ok(rs)
 }
 
-pub async fn clear(dm: &mut impl AsDataManager, source: &str, code: &str) -> io::Result<()> {
+pub async fn clear(dm: &mut impl AsDataManager, source: &str, target: &str) -> io::Result<()> {
     let source_v = get_all_by_path(dm, Path::from_str(source)).await?;
-    let code_v = get_all_by_path(dm, Path::from_str(code)).await?;
+    let code_v = get_all_by_path(dm, Path::from_str(target)).await?;
     for source in &source_v {
         for code in &code_v {
             dm.clear(source, code).await?;
@@ -117,13 +123,17 @@ pub async fn clear(dm: &mut impl AsDataManager, source: &str, code: &str) -> io:
     Ok(())
 }
 
-pub async fn dump(dm: &mut impl AsDataManager, target: &str) -> io::Result<String> {
-    let root = dm.get_target(target, "$root").await?;
-    let dimension_v = dm.get_target_v(target, "$dimension").await?;
-    let attr_v = dm.get_target_v(target, "$attr").await?;
+pub async fn dump(dm: &mut impl AsDataManager, source: &str, target: &str) -> io::Result<()> {
+    let source_v = get_all_by_path(dm, Path::from_str(source)).await?;
+    for source in &source_v {
+        let path = dm.get_target(target, "$path").await?;
+        let item_v = dm.get_target_v(target, "$item").await?;
 
-    let rs = dm.get_list(&root, &dimension_v, &attr_v).await?;
-    Ok(json::stringify(rs))
+        let rs = dm.dump(&path, &item_v).await?;
+        dm.insert_edge(source, "$result", &json::stringify(rs))
+            .await?;
+    }
+    Ok(())
 }
 
 pub async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
@@ -140,16 +150,14 @@ pub async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
 
 pub async fn delete_code_without_source(
     dm: &mut impl AsDataManager,
-    code: &str,
-    source_code: &str,
+    _source: &str,
+    target: &str,
 ) -> io::Result<()> {
-    dm.delete_code_without_source(code, source_code).await
-}
-
-pub async fn delete_code_without_target(
-    dm: &mut impl AsDataManager,
-    code: &str,
-    target_code: &str,
-) -> io::Result<()> {
-    dm.delete_code_without_target(code, target_code).await
+    let target_v = get_all_by_path(dm, Path::from_str(target)).await?;
+    for target in &target_v {
+        let code = get_target_anyway(dm, target, "$code").await?;
+        let source_code = get_target_anyway(dm, target, "$source_code").await?;
+        dm.delete_code_without_source(&code, &source_code).await?;
+    }
+    Ok(())
 }
