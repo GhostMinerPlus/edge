@@ -5,7 +5,7 @@ use std::io;
 
 use crate::{data::AsDataManager, mem_table::new_point};
 
-mod graph;
+use self::inc::Path;
 
 async fn dump_inc_v(dm: &mut impl AsDataManager, inc_h_v: &Vec<String>) -> io::Result<Vec<Inc>> {
     let mut inc_v = Vec::with_capacity(inc_h_v.len());
@@ -27,20 +27,20 @@ async fn invoke_inc(
 ) -> io::Result<InvokeResult> {
     match inc.code.as_str() {
         "clear" => {
-            dm.clear(&inc.source, &inc.target).await?;
+            inc::clear(dm, &inc.source, &inc.target).await?;
             Ok(InvokeResult::Jump(1))
         }
         "return" => Ok(InvokeResult::Return(inc.target.clone())),
         "dump" => Ok(InvokeResult::Return(inc::dump(dm, &inc.target).await?)),
         "dc_ns" => {
-            let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
-            let source_code = graph::get_target_anyway(dm, &inc.target, "$source_code").await?;
+            let code = inc::get_target_anyway(dm, &inc.target, "$code").await?;
+            let source_code = inc::get_target_anyway(dm, &inc.target, "$source_code").await?;
             inc::delete_code_without_source(dm, &code, &source_code).await?;
             Ok(InvokeResult::Jump(1))
         }
         "dc_nt" => {
-            let code = graph::get_target_anyway(dm, &inc.target, "$code").await?;
-            let target_code = graph::get_target_anyway(dm, &inc.target, "$target_code").await?;
+            let code = inc::get_target_anyway(dm, &inc.target, "$code").await?;
+            let target_code = inc::get_target_anyway(dm, &inc.target, "$target_code").await?;
             inc::delete_code_without_target(dm, &code, &target_code).await?;
             Ok(InvokeResult::Jump(1))
         }
@@ -71,9 +71,15 @@ async fn invoke_inc(
 
 async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<Inc> {
     let path = inc::unwrap_value(root, &inc.code).await?;
+    let code_v = inc::get_all_by_path(dm, Path::from_str(&path)).await?;
+    let code = if code_v.is_empty() {
+        String::default()
+    } else {
+        code_v[0].clone()
+    };
     let inc = Inc {
         source: inc::unwrap_value(root, &inc.source).await?,
-        code: dm.get_one_by_path(&path).await?,
+        code,
         target: inc::unwrap_value(root, &inc.target).await?,
     };
     Ok(inc)
@@ -233,17 +239,11 @@ mod tests {
             Ok(())
         }
 
-        fn get_all_by_path(
+        fn get_source_v(
             &mut self,
-            path: &str,
+            code: &str,
+            target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
-            async { todo!() }
-        }
-
-        fn get_one_by_path(
-            &mut self,
-            path: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
             async { todo!() }
         }
     }

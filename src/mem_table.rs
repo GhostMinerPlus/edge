@@ -131,6 +131,21 @@ impl MemTable {
         }
     }
 
+    pub fn get_source_v_unchecked(&mut self, code: &str, target: &str) -> Vec<String> {
+        if let Some(id_v) = self
+            .inx_code_target
+            .get(&(code.to_string(), target.to_string()))
+        {
+            let mut arr = Vec::with_capacity(id_v.len());
+            for id in id_v {
+                arr.push(self.edge_mp[id].source.clone());
+            }
+            arr
+        } else {
+            Vec::new()
+        }
+    }
+
     pub fn get_source(&self, code: &str, target: &str) -> Option<String> {
         match self
             .inx_code_target
