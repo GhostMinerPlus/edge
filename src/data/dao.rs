@@ -68,7 +68,9 @@ fn path_2_sql(path: &Path) -> Option<String> {
             sql
         })
         .reduce(|acc, item| format!("{acc}\n{item}")).unwrap();
-    Some(format!("select {name}.id, {root} as target from {sql} {join_v}"))
+    Some(format!(
+        "select {name}.id, {root} as target from {sql} {join_v}"
+    ))
 }
 
 fn make_dump_sql(path: &str, item_v: &Vec<String>) -> String {
@@ -102,7 +104,8 @@ fn make_dump_sql(path: &str, item_v: &Vec<String>) -> String {
                     format!("{acc}\njoin {item}")
                 }
             });
-        format!("SELECT {attr_item_v}
+        format!(
+            "SELECT {attr_item_v}
 FROM {attr_join_v}
 ORDER BY path.id"
         )

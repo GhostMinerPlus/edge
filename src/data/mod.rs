@@ -69,10 +69,6 @@ pub trait AsDataManager: Send {
         item_v: &Vec<String>,
     ) -> impl std::future::Future<Output = io::Result<json::Array>> + Send;
 
-    async fn commit(&mut self) -> io::Result<()>;
-
-    async fn flush(&mut self) -> io::Result<()>;
-
     fn delete_code_without_source(
         &mut self,
         code: &str,
@@ -84,6 +80,10 @@ pub trait AsDataManager: Send {
         code: &str,
         target_code: &str,
     ) -> impl std::future::Future<Output = io::Result<()>> + Send;
+
+    async fn commit(&mut self) -> io::Result<()>;
+
+    async fn flush(&mut self) -> io::Result<()>;
 }
 
 pub struct DataManager<'a> {
@@ -154,14 +154,6 @@ impl<'a> AsDataManager for DataManager<'a> {
         dao::dump(&mut self.conn, path, item_v).await
     }
 
-    async fn commit(&mut self) -> io::Result<()> {
-        commit(self).await
-    }
-
-    async fn flush(&mut self) -> io::Result<()> {
-        flush(self).await
-    }
-
     async fn delete_code_without_source(
         &mut self,
         code: &str,
@@ -178,5 +170,13 @@ impl<'a> AsDataManager for DataManager<'a> {
     ) -> io::Result<()> {
         flush(self).await?;
         dao::delete_code_without_target(self.conn, code, target_code).await
+    }
+
+    async fn commit(&mut self) -> io::Result<()> {
+        commit(self).await
+    }
+
+    async fn flush(&mut self) -> io::Result<()> {
+        flush(self).await
     }
 }
