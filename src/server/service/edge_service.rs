@@ -8,12 +8,7 @@ use crate::{
     mem_table::MemTable,
 };
 
-pub async fn execute(
-    conn: &mut MySqlConnection,
-    mem_table: &mut MemTable,
-    script: &str,
-) -> io::Result<Vec<String>> {
-    let mut root = format!("${}", uuid::Uuid::new_v4().to_string());
+fn parse_script(script: &str) -> io::Result<Vec<edge::Inc>> {
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {
@@ -33,9 +28,23 @@ pub async fn execute(
             _ => todo!(),
         }
     }
+    Ok(inc_v)
+}
+
+// Public
+pub async fn execute(
+    conn: &mut MySqlConnection,
+    mem_table: &mut MemTable,
+    script_v: &Vec<String>,
+) -> io::Result<json::JsonValue> {
+    let mut inc_v2 = Vec::with_capacity(script_v.len());
+    for script in script_v {
+        let inc_v = parse_script(script)?;
+        inc_v2.push(inc_v);
+    }
     let dm = DataManager::new(conn, mem_table);
     let mut edge_engine = EdgeEngine::new(dm);
-    let rs = edge_engine.invoke_inc_v(&mut root, &inc_v).await?;
+    let rs = edge_engine.execute(inc_v2).await?;
     edge_engine.commit().await?;
     Ok(rs)
 }
