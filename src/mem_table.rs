@@ -46,16 +46,17 @@ impl MemTable {
             target: target.to_string(),
             is_temp: true,
         };
-        self.edge_mp.insert(self.id, edge);
+        let uuid = next_id(&mut self.id);
+        self.edge_mp.insert(uuid, edge);
         insert(
             &mut self.inx_source_code,
             (source.to_string(), code.to_string()),
-            next_id(&mut self.id),
+            uuid,
         );
         insert(
             &mut self.inx_code_target,
             (code.to_string(), target.to_string()),
-            next_id(&mut self.id),
+            uuid,
         );
     }
 
@@ -67,16 +68,16 @@ impl MemTable {
             target: target.to_string(),
             is_temp: false,
         };
-        self.edge_mp.insert(uuid.clone(), edge);
+        self.edge_mp.insert(uuid, edge);
         insert(
             &mut self.inx_source_code,
             (source.to_string(), code.to_string()),
-            uuid.clone(),
+            uuid,
         );
         insert(
             &mut self.inx_code_target,
             (code.to_string(), target.to_string()),
-            uuid.clone(),
+            uuid,
         );
         uuid
     }
@@ -89,16 +90,16 @@ impl MemTable {
             target: target.to_string(),
             is_temp: true,
         };
-        self.edge_mp.insert(uuid.clone(), edge);
+        self.edge_mp.insert(uuid, edge);
         insert(
             &mut self.inx_source_code,
             (source.to_string(), code.to_string()),
-            uuid.clone(),
+            uuid,
         );
         insert(
             &mut self.inx_code_target,
             (code.to_string(), target.to_string()),
-            uuid.clone(),
+            uuid,
         );
         uuid
     }
