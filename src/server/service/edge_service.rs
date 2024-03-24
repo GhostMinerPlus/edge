@@ -5,7 +5,7 @@ use sqlx::MySqlConnection;
 use crate::{
     data::DataManager,
     edge::{self, AsEdgeEngine, EdgeEngine},
-    mem_table::{new_point, MemTable},
+    mem_table::MemTable,
 };
 
 pub async fn execute(
@@ -13,20 +13,21 @@ pub async fn execute(
     mem_table: &mut MemTable,
     script: &str,
 ) -> io::Result<Vec<String>> {
-    let mut root = format!("${}", new_point());
+    let mut root = format!("${}", uuid::Uuid::new_v4().to_string());
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {
             continue;
         }
-        // <source> <code> <target>
+        // <output> <function> <input>
         let word_v: Vec<&str> = line.split(" ").collect();
         match word_v.len() {
-            3 => {
+            4 => {
                 inc_v.push(edge::Inc {
-                    source: word_v[0].trim().to_string(),
-                    code: word_v[1].trim().to_string(),
-                    target: word_v[2].trim().to_string(),
+                    output: word_v[0].trim().to_string(),
+                    function: word_v[1].trim().to_string(),
+                    input: word_v[2].trim().to_string(),
+                    input1: word_v[3].trim().to_string(),
                 });
             }
             _ => todo!(),
