@@ -5,107 +5,201 @@ use std::io;
 
 use crate::{data::AsDataManager, mem_table::new_point};
 
-async fn dump_inc_v(dm: &mut impl AsDataManager, inc_h_v: &Vec<String>) -> io::Result<Vec<Inc>> {
+#[async_recursion::async_recursion]
+async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Result<Vec<String>> {
+    if path.step_v.is_empty() {
+        return Ok(vec![path.root.clone()]);
+    }
+    let root = path.root.clone();
+    let step = path.step_v.remove(0);
+    let curr_v = if step.arrow == "->" {
+        dm.get_target_v(&root, &step.code).await?
+    } else {
+        dm.get_source_v(&step.code, &root).await?
+    };
+    let mut rs = Vec::new();
+    for root in curr_v {
+        rs.append(
+            &mut get_all_by_path(
+                dm,
+                Path {
+                    root,
+                    step_v: path.step_v.clone(),
+                },
+            )
+            .await?,
+        );
+    }
+    Ok(rs)
+}
+
+async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
+    if value == "?" {
+        Ok(new_point())
+    } else if value == "$" {
+        Ok(root.to_string())
+    } else if value.starts_with("$<-") {
+        Ok(format!("{root}{}", &value[1..]))
+    } else if value.starts_with("$->") {
+        Ok(format!("{root}{}", &value[1..]))
+    } else {
+        Ok(value.to_string())
+    }
+}
+
+async fn asign(dm: &mut impl AsDataManager, output: &str, item_v: Vec<String>) -> io::Result<()> {
+    if item_v.is_empty() {
+        return Ok(());
+    }
+    let mut output_path = Path::from_str(output);
+    let last_step = output_path.step_v.pop().unwrap();
+    let root_v = get_all_by_path(dm, output_path).await?;
+    if last_step.arrow == "->" {
+        for source in &root_v {
+            dm.clear(source, &last_step.code).await?;
+            for target in &item_v {
+                dm.insert_edge(source, &last_step.code, target).await?;
+            }
+        }
+    } else {
+        for target in &root_v {
+            dm.rclear(&last_step.code, target).await?;
+            for source in &item_v {
+                dm.insert_edge(source, &last_step.code, target).await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn dump_inc_v(dm: &mut impl AsDataManager, function: &str) -> io::Result<Vec<Inc>> {
+    let inc_h_v = dm.get_target_v(function, "inc").await?;
     let mut inc_v = Vec::with_capacity(inc_h_v.len());
-    for inc_h in inc_h_v {
+    for inc_h in &inc_h_v {
         inc_v.push(Inc {
-            source: dm.get_target(inc_h, "source").await?,
-            code: dm.get_target(inc_h, "code").await?,
-            target: dm.get_target(inc_h, "target").await?,
+            output: dm.get_target(inc_h, "output").await?,
+            function: dm.get_target(inc_h, "function").await?,
+            input: dm.get_target(inc_h, "input").await?,
+            input1: dm.get_target(inc_h, "input1").await?,
         });
     }
     Ok(inc_v)
 }
 
 #[async_recursion::async_recursion]
-async fn invoke_inc(
-    dm: &mut impl AsDataManager,
-    root: &mut String,
-    inc: &Inc,
-) -> io::Result<InvokeResult> {
+async fn invoke_inc(dm: &mut impl AsDataManager, root: &mut String, inc: &Inc) -> io::Result<()> {
     log::debug!("invoke_inc: {:?}", inc);
-    match inc.code.as_str() {
-        "clear" => {
-            inc::clear(dm, &inc.source, &inc.target).await?;
-            Ok(InvokeResult::Jump(1))
-        }
-        "return" => {
-            let target_v = inc::get_all_by_path(dm, Path::from_str(&inc.target)).await?;
-            Ok(InvokeResult::Return(target_v))
-        }
-        "dump" => {
-            inc::dump(dm, &inc.source, &inc.target).await?;
-            Ok(InvokeResult::Jump(1))
-        }
-        "dc_ns" => {
-            inc::delete_code_without_source(dm, &inc.source, &inc.target).await?;
-            Ok(InvokeResult::Jump(1))
-        }
+    let input_item_v = get_all_by_path(dm, Path::from_str(&inc.input)).await?;
+    let input1_item_v = get_all_by_path(dm, Path::from_str(&inc.input1)).await?;
+    let rs = match inc.function.as_str() {
+        "=" => inc::set(dm, input_item_v, input1_item_v).await?,
+        "+" => inc::add(dm, input_item_v, input1_item_v).await?,
+        "-" => inc::minus(dm, input_item_v, input1_item_v).await?,
+        "new" => inc::new(dm, input_item_v, input1_item_v).await?,
+        "sort" => inc::sort(dm, input_item_v, input1_item_v).await?,
+        "dump" => inc::dump(dm, input_item_v, input1_item_v).await?,
         _ => {
-            let source_v = inc::get_all_by_path(dm, Path::from_str(&inc.source)).await?;
-            log::debug!("unwraped {} to {:?}", inc.source, source_v);
-            let target_v = inc::get_all_by_path(dm, Path::from_str(&inc.target)).await?;
-            log::debug!("unwraped {} to {:?}", inc.target, target_v);
-
-            for source in &source_v {
-                for target in &target_v {
-                    log::debug!("inserting an edge: {source} {} {target}", inc.code);
-                    dm.insert_edge(source, &inc.code, target).await?;
-                    let listener_v = dm.get_target_v(&inc.code, "listener").await?;
-                    for listener in &listener_v {
-                        let inc_h_v = dm.get_target_v(&listener, "inc").await?;
-                        let inc_v = dump_inc_v(dm, &inc_h_v).await?;
-
-                        let mut new_root = format!("${}", new_point());
-                        dm.insert_edge(&new_root, "$source", source).await?;
-                        dm.insert_edge(&new_root, "$code", &inc.code).await?;
-                        dm.insert_edge(&new_root, "$target", target).await?;
-                        let mut pos = 0i32;
-                        while (pos as usize) < inc_v.len() {
-                            let inc = unwrap_inc(dm, &mut new_root, &inc_v[pos as usize]).await?;
-                            match invoke_inc(dm, root, &inc).await? {
-                                InvokeResult::Jump(step) => pos += step,
-                                InvokeResult::Return(_) => break,
-                            }
-                        }
-                    }
-                }
+            let inc_v = dump_inc_v(dm, &inc.function).await?;
+            let new_root = format!("${}", new_point());
+            asign(dm, &format!("{new_root}->$input"), input_item_v).await?;
+            asign(dm, &format!("{new_root}->$input1"), input1_item_v).await?;
+            log::debug!("inc_v.len(): {}", inc_v.len());
+            for inc in &inc_v {
+                let inc = unwrap_inc(dm, &new_root, inc).await?;
+                invoke_inc(dm, root, &inc).await?;
             }
-
-            Ok(InvokeResult::Jump(1))
+            get_all_by_path(dm, Path::from_str(&format!("{new_root}->$output"))).await?
         }
-    }
+    };
+    asign(dm, &inc.output, rs).await
 }
 
 async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<Inc> {
-    let path = inc::unwrap_value(root, &inc.code).await?;
-    let code_v = inc::get_all_by_path(dm, Path::from_str(&path)).await?;
-    let code = if code_v.is_empty() {
-        String::default()
-    } else {
-        code_v[0].clone()
-    };
+    let path = unwrap_value(root, &inc.function).await?;
+    let function_v = get_all_by_path(dm, Path::from_str(&path)).await?;
+    if function_v.len() != 1 {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "unknown function"));
+    }
     let inc = Inc {
-        source: inc::unwrap_value(root, &inc.source).await?,
-        code,
-        target: inc::unwrap_value(root, &inc.target).await?,
+        output: unwrap_value(root, &inc.output).await?,
+        function: function_v[0].clone(),
+        input: unwrap_value(root, &inc.input).await?,
+        input1: unwrap_value(root, &inc.input1).await?,
     };
     Ok(inc)
 }
 
 // Public
-pub use self::inc::Path;
+#[derive(Clone)]
+pub struct Step {
+    pub arrow: String,
+    pub code: String,
+}
+
+pub struct Path {
+    pub root: String,
+    pub step_v: Vec<Step>,
+}
+
+fn find_arrrow(path: &str) -> usize {
+    let p = path.find("->");
+    let q = path.find("<-");
+    if p.is_none() && q.is_none() {
+        path.len()
+    } else {
+        if p.is_some() && q.is_some() {
+            let p = p.unwrap();
+            let q = q.unwrap();
+            std::cmp::min(p, q)
+        } else if p.is_some() {
+            p.unwrap()
+        } else {
+            q.unwrap()
+        }
+    }
+}
+
+impl Path {
+    pub fn from_str(path: &str) -> Self {
+        log::debug!("Path::from_str: {path}");
+        if path.starts_with('"') {
+            return Self {
+                root: path[1..path.len() - 1].to_string(),
+                step_v: Vec::new(),
+            };
+        }
+        let mut s = find_arrrow(path);
+
+        let root = path[0..s].to_string();
+        if s == path.len() {
+            return Self {
+                root,
+                step_v: Vec::new(),
+            };
+        }
+        let mut tail = &path[s..];
+        let mut step_v = Vec::new();
+        loop {
+            s = find_arrrow(&tail[2..]) + 2;
+            step_v.push(Step {
+                arrow: tail[0..2].to_string(),
+                code: tail[2..s].to_string(),
+            });
+            if s == tail.len() {
+                break;
+            }
+            tail = &tail[s..];
+        }
+        Self { root, step_v }
+    }
+}
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct Inc {
-    pub source: String,
-    pub code: String,
-    pub target: String,
-}
-
-pub enum InvokeResult {
-    Jump(i32),
-    Return(Vec<String>),
+    pub output: String,
+    pub function: String,
+    pub input: String,
+    pub input1: String,
 }
 
 pub trait AsEdgeEngine {
@@ -134,21 +228,12 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
         root: &mut String,
         inc_v: &Vec<Inc>,
     ) -> io::Result<Vec<String>> {
-        let mut pos = 0i32;
-        let mut rs = Vec::new();
         log::debug!("inc_v.len(): {}", inc_v.len());
-        while (pos as usize) < inc_v.len() {
-            log::debug!("pos: {}", pos);
-            let inc = unwrap_inc(&mut self.dm, &root, &inc_v[pos as usize]).await?;
-            match invoke_inc(&mut self.dm, root, &inc).await? {
-                InvokeResult::Jump(step) => pos += step,
-                InvokeResult::Return(s) => {
-                    rs = s;
-                    break;
-                }
-            }
+        for inc in inc_v {
+            let inc = unwrap_inc(&mut self.dm, &root, inc).await?;
+            invoke_inc(&mut self.dm, root, &inc).await?;
         }
-        Ok(rs)
+        get_all_by_path(&mut self.dm, Path::from_str(&format!("{root}->$output"))).await
     }
 
     async fn commit(&mut self) -> io::Result<()> {
@@ -194,6 +279,15 @@ mod tests {
             code: &str,
         ) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
             self.mem_table.delete_edge_with_source_code(source, code);
+            async { Ok(()) }
+        }
+
+        fn rclear(
+            &mut self,
+            code: &str,
+            target: &str,
+        ) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
+            self.mem_table.delete_edge_with_code_target(code, target);
             async { Ok(()) }
         }
 
@@ -277,32 +371,30 @@ mod tests {
             let mut root = new_point();
             let inc_v = vec![
                 Inc {
-                    source: "aim".to_string(),
-                    code: "listener".to_string(),
-                    target: "test_listener".to_string(),
+                    output: "$->$left".to_string(),
+                    function: "new".to_string(),
+                    input: "100".to_string(),
+                    input1: "100".to_string(),
                 },
                 Inc {
-                    source: "test_listener".to_string(),
-                    code: "inc".to_string(),
-                    target: "test_listener_1".to_string(),
+                    output: "$->$right".to_string(),
+                    function: "new".to_string(),
+                    input: "100".to_string(),
+                    input1: "100".to_string(),
                 },
                 Inc {
-                    source: "edge".to_string(),
-                    code: "aim".to_string(),
-                    target: "target".to_string(),
-                },
-                Inc {
-                    source: "$".to_string(),
-                    code: "return".to_string(),
-                    target: "edge->aim".to_string(),
+                    output: "$->$output".to_string(),
+                    function: "+".to_string(),
+                    input: "$->$left".to_string(),
+                    input1: "$->$right".to_string(),
                 },
             ];
 
             let mut edge_engine = EdgeEngine::new(dm);
             let rs = edge_engine.invoke_inc_v(&mut root, &inc_v).await.unwrap();
             edge_engine.commit().await.unwrap();
-            assert_eq!(rs.len(), 1);
-            assert_eq!(rs[0], "target");
+            assert_eq!(rs.len(), 100);
+            assert_eq!(rs[0], "200");
         };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

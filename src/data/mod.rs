@@ -35,6 +35,13 @@ pub trait AsDataManager: Send {
         code: &str,
     ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
+    /// Clear all edge with `source` and `code` and insert a new edge
+    fn rclear(
+        &mut self,
+        code: &str,
+        target: &str,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
+
     /// Get a target from `source->code`
     fn get_target(
         &mut self,
@@ -109,6 +116,15 @@ impl<'a> AsDataManager for DataManager<'a> {
     async fn clear(&mut self, source: &str, code: &str) -> io::Result<()> {
         self.mem_table.delete_edge_with_source_code(source, code);
         dao::delete_edge_with_source_code(&mut self.conn, source, code).await
+    }
+
+    fn rclear(
+        &mut self,
+        code: &str,
+        target: &str,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send {
+        self.mem_table.delete_edge_with_code_target(code, target);
+        async { dao::delete_edge_with_code_target(&mut self.conn, code, target).await }
     }
 
     async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {

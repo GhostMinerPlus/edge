@@ -19,14 +19,15 @@ pub async fn execute(
         if line.is_empty() {
             continue;
         }
-        // <source> <code> <target>
+        // <output> <function> <input>
         let word_v: Vec<&str> = line.split(" ").collect();
         match word_v.len() {
-            3 => {
+            4 => {
                 inc_v.push(edge::Inc {
-                    source: word_v[0].trim().to_string(),
-                    code: word_v[1].trim().to_string(),
-                    target: word_v[2].trim().to_string(),
+                    output: word_v[0].trim().to_string(),
+                    function: word_v[1].trim().to_string(),
+                    input: word_v[2].trim().to_string(),
+                    input1: word_v[3].trim().to_string(),
                 });
             }
             _ => todo!(),

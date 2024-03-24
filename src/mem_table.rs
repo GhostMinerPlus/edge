@@ -196,4 +196,16 @@ impl MemTable {
             }
         }
     }
+
+    pub fn delete_edge_with_code_target(&mut self, code: &str, target: &str) {
+        if let Some(uuid_v) = self
+            .inx_code_target
+            .remove(&(code.to_string(), target.to_string()))
+        {
+            for uuid in &uuid_v {
+                let edge = self.edge_mp.remove(uuid).unwrap();
+                self.inx_source_code.remove(&(edge.source, edge.code));
+            }
+        }
+    }
 }

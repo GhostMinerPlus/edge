@@ -1,170 +1,108 @@
-use std::io;
+use std::{cmp::min, io};
 
-use crate::{data::AsDataManager, mem_table::new_point};
-
-fn find_arrrow(path: &str) -> usize {
-    let p = path.find("->");
-    let q = path.find("<-");
-    if p.is_none() && q.is_none() {
-        path.len()
-    } else {
-        if p.is_some() && q.is_some() {
-            let p = p.unwrap();
-            let q = q.unwrap();
-            std::cmp::min(p, q)
-        } else if p.is_some() {
-            p.unwrap()
-        } else {
-            q.unwrap()
-        }
-    }
-}
+use crate::data::AsDataManager;
 
 // Public
-#[derive(Clone)]
-pub struct Step {
-    pub arrow: String,
-    pub code: String,
-}
-
-pub struct Path {
-    pub root: String,
-    pub step_v: Vec<Step>,
-}
-
-impl Path {
-    pub fn from_str(path: &str) -> Self {
-        log::debug!("Path::from_str: {path}");
-        if path.starts_with('"') {
-            return Self {
-                root: path[1..path.len() - 1].to_string(),
-                step_v: Vec::new(),
-            };
-        }
-        let mut s = find_arrrow(path);
-
-        let root = path[0..s].to_string();
-        if s == path.len() {
-            return Self {
-                root,
-                step_v: Vec::new(),
-            };
-        }
-        let mut tail = &path[s..];
-        let mut step_v = Vec::new();
-        loop {
-            s = find_arrrow(&tail[2..]) + 2;
-            step_v.push(Step {
-                arrow: tail[0..2].to_string(),
-                code: tail[2..s].to_string(),
-            });
-            if s == tail.len() {
-                break;
-            }
-            tail = &tail[s..];
-        }
-        Self { root, step_v }
-    }
-}
-
-pub async fn get_target_anyway(
-    dm: &mut impl AsDataManager,
-    source: &str,
-    code: &str,
-) -> io::Result<String> {
-    match dm.get_target(source, code).await {
-        Ok(target) => Ok(target),
-        Err(_) => {
-            let target = new_point();
-            dm.insert_edge(source, code, &target).await?;
-            Ok(target)
-        }
-    }
-}
-
-#[async_recursion::async_recursion]
-pub async fn get_all_by_path(
-    dm: &mut impl AsDataManager,
-    mut path: Path,
+pub async fn set(
+    _: &mut impl AsDataManager,
+    input_item_v: Vec<String>,
+    _: Vec<String>,
 ) -> io::Result<Vec<String>> {
-    if path.step_v.is_empty() {
-        return Ok(vec![path.root.clone()]);
-    }
-    let root = path.root.clone();
-    let step = path.step_v.remove(0);
-    let curr_v = if step.arrow == "->" {
-        dm.get_target_v(&root, &step.code).await?
-    } else {
-        dm.get_source_v(&step.code, &root).await?
-    };
-    let mut rs = Vec::new();
-    for root in curr_v {
-        rs.append(
-            &mut get_all_by_path(
-                dm,
-                Path {
-                    root,
-                    step_v: path.step_v.clone(),
-                },
-            )
-            .await?,
-        );
-    }
-    Ok(rs)
+    Ok(input_item_v)
 }
 
-pub async fn clear(dm: &mut impl AsDataManager, source: &str, target: &str) -> io::Result<()> {
-    let source_v = get_all_by_path(dm, Path::from_str(source)).await?;
-    let code_v = get_all_by_path(dm, Path::from_str(target)).await?;
-    for source in &source_v {
-        for code in &code_v {
-            dm.clear(source, code).await?;
-        }
-    }
-    Ok(())
-}
-
-pub async fn dump(dm: &mut impl AsDataManager, source: &str, target: &str) -> io::Result<()> {
-    let source_v = get_all_by_path(dm, Path::from_str(source)).await?;
-    let target_v = get_all_by_path(dm, Path::from_str(target)).await?;
-    for source in &source_v {
-        for target in &target_v {
-            log::debug!("dump: {source} {target}");
-            let path = dm.get_target(target, "$path").await?;
-            let item_v = dm.get_target_v(target, "$item").await?;
-
-            let rs = dm.dump(&path, &item_v).await?;
-            dm.insert_edge(source, "$result", &json::stringify(rs))
-                .await?;
-        }
-    }
-    Ok(())
-}
-
-pub async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
-    if value == "?" {
-        Ok(new_point())
-    } else if value == "$" {
-        Ok(root.to_string())
-    } else if value.starts_with("$<-") {
-        Ok(format!("{root}{}", &value[1..]))
-    } else if value.starts_with("$->") {
-        Ok(format!("{root}{}", &value[1..]))
-    } else {
-        Ok(value.to_string())
-    }
-}
-
-pub async fn delete_code_without_source(
+pub async fn dump(
     dm: &mut impl AsDataManager,
-    _source: &str,
-    target: &str,
-) -> io::Result<()> {
-    let target_v = get_all_by_path(dm, Path::from_str(target)).await?;
-    for target in &target_v {
-        let code = get_target_anyway(dm, target, "$code").await?;
-        let source_code = get_target_anyway(dm, target, "$source_code").await?;
-        dm.delete_code_without_source(&code, &source_code).await?;
+    input_item_v: Vec<String>,
+    _: Vec<String>,
+) -> io::Result<Vec<String>> {
+    let mut output_item_v = Vec::with_capacity(input_item_v.len());
+    for input_item in &input_item_v {
+        let path = dm.get_target(input_item, "$path").await?;
+        let item_v = dm.get_target_v(input_item, "$item").await?;
+
+        let rs = dm.dump(&path, &item_v).await?;
+        let s = json::stringify(rs);
+        if !s.is_empty() {
+            output_item_v.push(s);
+        }
     }
-    Ok(())
+    Ok(output_item_v)
+}
+
+pub async fn sort(
+    dm: &mut impl AsDataManager,
+    input_item_v: Vec<String>,
+    _: Vec<String>,
+) -> io::Result<Vec<String>> {
+    let mut temp_item_v = Vec::with_capacity(input_item_v.len());
+    for input_item in &input_item_v {
+        let no = dm.get_target(input_item, "$no").await?;
+        temp_item_v.push((input_item.clone(), no));
+    }
+    temp_item_v.sort_by(|p, q| p.1.cmp(&q.1));
+    let output_item_v = temp_item_v.into_iter().map(|item| item.0).collect();
+    Ok(output_item_v)
+}
+
+pub async fn add(
+    _: &mut impl AsDataManager,
+    input_item_v: Vec<String>,
+    input1_item_v: Vec<String>,
+) -> io::Result<Vec<String>> {
+    let sz = min(input_item_v.len(), input1_item_v.len());
+    let mut output_item_v = Vec::with_capacity(sz);
+    for i in 0..sz {
+        let left = input_item_v[i].parse::<f64>();
+        if left.is_err() {
+            continue;
+        }
+        let right = input1_item_v[i].parse::<f64>();
+        if right.is_err() {
+            continue;
+        }
+        let r: f64 = left.unwrap() + right.unwrap();
+        output_item_v.push(r.to_string());
+    }
+    Ok(output_item_v)
+}
+
+pub async fn minus(
+    _: &mut impl AsDataManager,
+    input_item_v: Vec<String>,
+    input1_item_v: Vec<String>,
+) -> io::Result<Vec<String>> {
+    let sz = min(input_item_v.len(), input1_item_v.len());
+    let mut output_item_v = Vec::with_capacity(sz);
+    for i in 0..sz {
+        let left = input_item_v[i].parse::<f64>();
+        if left.is_err() {
+            continue;
+        }
+        let right = input1_item_v[i].parse::<f64>();
+        if right.is_err() {
+            continue;
+        }
+        let r: f64 = left.unwrap() - right.unwrap();
+        output_item_v.push(r.to_string());
+    }
+    Ok(output_item_v)
+}
+
+pub async fn new(
+    _: &mut impl AsDataManager,
+    input_item_v: Vec<String>,
+    input1_item_v: Vec<String>,
+) -> io::Result<Vec<String>> {
+    if min(input_item_v.len(), input1_item_v.len()) != 1 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "need 1 but not"));
+    }
+    let sz = input_item_v[0]
+        .parse::<i64>()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut output_item_v = Vec::with_capacity(sz as usize);
+    for _ in 0..sz {
+        output_item_v.push(input1_item_v[0].clone());
+    }
+    Ok(output_item_v)
 }

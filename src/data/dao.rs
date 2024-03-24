@@ -127,6 +127,20 @@ pub async fn delete_edge_with_source_code(
     Ok(())
 }
 
+pub async fn delete_edge_with_code_target(
+    conn: &mut MySqlConnection,
+    code: &str,
+    target: &str,
+) -> io::Result<()> {
+    sqlx::query("delete from edge_t where code = ? and target = ?")
+        .bind(code)
+        .bind(target)
+        .execute(conn)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(())
+}
+
 pub async fn insert_edge_mp(
     conn: &mut MySqlConnection,
     edge_mp: &HashMap<String, Edge>,
