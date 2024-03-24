@@ -100,7 +100,7 @@ async fn dump_inc_v(dm: &mut impl AsDataManager, function: &str) -> io::Result<V
 }
 
 #[async_recursion::async_recursion]
-async fn invoke_inc(dm: &mut impl AsDataManager, root: &mut String, inc: &Inc) -> io::Result<()> {
+async fn invoke_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<()> {
     log::debug!("invoke_inc: {:?}", inc);
     let input_item_v = get_all_by_path(dm, Path::from_str(&inc.input)).await?;
     let input1_item_v = get_all_by_path(dm, Path::from_str(&inc.input1)).await?;
@@ -162,18 +162,6 @@ async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::R
     Ok(inc)
 }
 
-// Public
-#[derive(Clone)]
-pub struct Step {
-    pub arrow: String,
-    pub code: String,
-}
-
-pub struct Path {
-    pub root: String,
-    pub step_v: Vec<Step>,
-}
-
 fn find_arrrow(path: &str) -> usize {
     let p = path.find("->");
     let q = path.find("<-");
@@ -190,6 +178,59 @@ fn find_arrrow(path: &str) -> usize {
             q.unwrap()
         }
     }
+}
+
+async fn invoke_inc_v(
+    dm: &mut impl AsDataManager,
+    root: &str,
+    inc_v: &Vec<Inc>,
+) -> io::Result<Vec<String>> {
+    log::debug!("inc_v.len(): {}", inc_v.len());
+    for inc in inc_v {
+        let inc = unwrap_inc(dm, &root, inc).await?;
+        invoke_inc(dm, root, &inc).await?;
+    }
+    get_all_by_path(dm, Path::from_str(&format!("{root}->$output"))).await
+}
+
+#[async_recursion::async_recursion]
+async fn execute(
+    dm: &mut impl AsDataManager,
+    root: &str,
+    mut inc_v2: Vec<Vec<Inc>>,
+) -> io::Result<json::JsonValue> {
+    let inc_v = inc_v2.remove(0);
+    let rs = invoke_inc_v(dm, &root, &inc_v).await?;
+    log::debug!("rs.len()={}", rs.len());
+    let mut r: json::JsonValue = rs.into();
+    if inc_v2.is_empty() {
+        Ok(r)
+    } else {
+        for item in r.members_mut() {
+            let root = format!("${}", uuid::Uuid::new_v4().to_string());
+            let input = item.as_str().unwrap().to_string();
+            dm.insert_edge_v(&vec![Edge {
+                source: root.clone(),
+                code: "$input".to_string(),
+                target: input,
+            }])
+            .await?;
+            *item = execute(dm, &root, inc_v2.clone()).await?.into();
+        }
+        Ok(r)
+    }
+}
+
+// Public
+#[derive(Clone)]
+pub struct Step {
+    pub arrow: String,
+    pub code: String,
+}
+
+pub struct Path {
+    pub root: String,
+    pub step_v: Vec<Step>,
 }
 
 impl Path {
@@ -242,11 +283,7 @@ pub struct Inc {
 }
 
 pub trait AsEdgeEngine {
-    async fn invoke_inc_v(
-        &mut self,
-        root: &mut String,
-        inc_v: &Vec<Inc>,
-    ) -> io::Result<Vec<String>>;
+    async fn execute(&mut self, inc_v2: Vec<Vec<Inc>>) -> io::Result<json::JsonValue>;
 
     async fn commit(&mut self) -> io::Result<()>;
 }
@@ -262,17 +299,9 @@ impl<DM: AsDataManager> EdgeEngine<DM> {
 }
 
 impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
-    async fn invoke_inc_v(
-        &mut self,
-        root: &mut String,
-        inc_v: &Vec<Inc>,
-    ) -> io::Result<Vec<String>> {
-        log::debug!("inc_v.len(): {}", inc_v.len());
-        for inc in inc_v {
-            let inc = unwrap_inc(&mut self.dm, &root, inc).await?;
-            invoke_inc(&mut self.dm, root, &inc).await?;
-        }
-        get_all_by_path(&mut self.dm, Path::from_str(&format!("{root}->$output"))).await
+    async fn execute(&mut self, inc_v2: Vec<Vec<Inc>>) -> io::Result<json::JsonValue> {
+        let root = format!("${}", uuid::Uuid::new_v4().to_string());
+        execute(&mut self.dm, &root, inc_v2).await
     }
 
     async fn commit(&mut self) -> io::Result<()> {
@@ -377,33 +406,42 @@ mod tests {
     fn test() {
         let task = async {
             let dm = FakeDataManager::new();
-            let mut root = uuid::Uuid::new_v4().to_string();
-            let inc_v = vec![
-                Inc {
-                    output: "$->$left".to_string(),
-                    function: "new".to_string(),
-                    input: "100".to_string(),
-                    input1: "100".to_string(),
-                },
-                Inc {
-                    output: "$->$right".to_string(),
-                    function: "new".to_string(),
-                    input: "100".to_string(),
-                    input1: "100".to_string(),
-                },
-                Inc {
-                    output: "$->$output".to_string(),
-                    function: "+".to_string(),
-                    input: "$->$left".to_string(),
-                    input1: "$->$right".to_string(),
-                },
+            let inc_v2 = vec![
+                vec![
+                    Inc {
+                        output: "$->$left".to_string(),
+                        function: "new".to_string(),
+                        input: "100".to_string(),
+                        input1: "100".to_string(),
+                    },
+                    Inc {
+                        output: "$->$right".to_string(),
+                        function: "new".to_string(),
+                        input: "100".to_string(),
+                        input1: "100".to_string(),
+                    },
+                    Inc {
+                        output: "$->$output".to_string(),
+                        function: "+".to_string(),
+                        input: "$->$left".to_string(),
+                        input1: "$->$right".to_string(),
+                    },
+                ],
+                vec![
+                    Inc {
+                        output: "$->$output".to_string(),
+                        function: "rand".to_string(),
+                        input: "$->$input".to_string(),
+                        input1: "_".to_string(),
+                    }
+                ],
             ];
 
             let mut edge_engine = EdgeEngine::new(dm);
-            let rs = edge_engine.invoke_inc_v(&mut root, &inc_v).await.unwrap();
+            let rs = edge_engine.execute(inc_v2).await.unwrap();
             edge_engine.commit().await.unwrap();
             assert_eq!(rs.len(), 100);
-            assert_eq!(rs[0], "200");
+            assert_eq!(rs[0].len(), 200);
         };
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
