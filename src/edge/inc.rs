@@ -8,26 +8,7 @@ pub async fn set(
     input_item_v: Vec<String>,
     _: Vec<String>,
 ) -> io::Result<Vec<String>> {
-    Ok(input_item_v)
-}
-
-pub async fn dump(
-    dm: &mut impl AsDataManager,
-    input_item_v: Vec<String>,
-    _: Vec<String>,
-) -> io::Result<Vec<String>> {
-    let mut output_item_v = Vec::with_capacity(input_item_v.len());
-    for input_item in &input_item_v {
-        let path = dm.get_target(input_item, "$path").await?;
-        let item_v = dm.get_target_v(input_item, "$item").await?;
-
-        let rs = dm.dump(&path, &item_v).await?;
-        let s = json::stringify(rs);
-        if !s.is_empty() {
-            output_item_v.push(s);
-        }
-    }
-    Ok(output_item_v)
+    Ok(input_item_v.into_iter().filter(|s| !s.is_empty()).collect())
 }
 
 pub async fn sort(
@@ -105,4 +86,13 @@ pub async fn new(
         output_item_v.push(input1_item_v[0].clone());
     }
     Ok(output_item_v)
+}
+
+pub async fn append(
+    _: &mut impl AsDataManager,
+    mut input_item_v: Vec<String>,
+    mut input1_item_v: Vec<String>,
+) -> io::Result<Vec<String>> {
+    input_item_v.append(&mut input1_item_v);
+    Ok(input_item_v)
 }

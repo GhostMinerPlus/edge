@@ -19,14 +19,18 @@ async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
 }
 
 // Public
+pub struct Edge {
+    pub source: String,
+    pub code: String,
+    pub target: String,
+}
+
 pub trait AsDataManager: Send {
     /// Insert a new edge
-    fn insert_edge(
+    fn insert_edge_v(
         &mut self,
-        source: &str,
-        code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
+        edge_v: &Vec<Edge>,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
     /// Clear all edge with `source` and `code` and insert a new edge
     fn clear(
@@ -70,24 +74,6 @@ pub trait AsDataManager: Send {
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
 
-    fn dump(
-        &mut self,
-        path: &str,
-        item_v: &Vec<String>,
-    ) -> impl std::future::Future<Output = io::Result<json::Array>> + Send;
-
-    fn delete_code_without_source(
-        &mut self,
-        code: &str,
-        source_code: &str,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
-
-    fn delete_code_without_target(
-        &mut self,
-        code: &str,
-        target_code: &str,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
-
     async fn commit(&mut self) -> io::Result<()>;
 
     async fn flush(&mut self) -> io::Result<()>;
@@ -105,26 +91,33 @@ impl<'a> DataManager<'a> {
 }
 
 impl<'a> AsDataManager for DataManager<'a> {
-    async fn insert_edge(&mut self, source: &str, code: &str, target: &str) -> io::Result<String> {
-        if is_temp(source, code, target) {
-            Ok(self.mem_table.insert_temp_edge(source, code, target))
-        } else {
-            Ok(self.mem_table.insert_edge(source, code, target))
+    async fn insert_edge_v(&mut self, edge_v: &Vec<Edge>) -> io::Result<()> {
+        for edge in edge_v {
+            if is_temp(&edge.source, &edge.code, &edge.target) {
+                self.mem_table
+                    .insert_temp_edge(&edge.source, &edge.code, &edge.target);
+            } else {
+                self.mem_table
+                    .insert_edge(&edge.source, &edge.code, &edge.target);
+            }
         }
+        Ok(())
     }
 
     async fn clear(&mut self, source: &str, code: &str) -> io::Result<()> {
         self.mem_table.delete_edge_with_source_code(source, code);
-        dao::delete_edge_with_source_code(&mut self.conn, source, code).await
+        if !is_temp(source, code, "") {
+            dao::delete_edge_with_source_code(&mut self.conn, source, code).await?;
+        }
+        Ok(())
     }
 
-    fn rclear(
-        &mut self,
-        code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send {
+    async fn rclear(&mut self, code: &str, target: &str) -> io::Result<()> {
         self.mem_table.delete_edge_with_code_target(code, target);
-        async { dao::delete_edge_with_code_target(&mut self.conn, code, target).await }
+        if !is_temp("", code, target) {
+            dao::delete_edge_with_code_target(&mut self.conn, code, target).await?;
+        }
+        Ok(())
     }
 
     async fn get_target(&mut self, source: &str, code: &str) -> io::Result<String> {
@@ -163,29 +156,6 @@ impl<'a> AsDataManager for DataManager<'a> {
             flush(self).await?;
             dao::get_source_v(&mut self.conn, code, target).await
         }
-    }
-
-    async fn dump(&mut self, path: &str, item_v: &Vec<String>) -> io::Result<json::Array> {
-        flush(self).await?;
-        dao::dump(&mut self.conn, path, item_v).await
-    }
-
-    async fn delete_code_without_source(
-        &mut self,
-        code: &str,
-        source_code: &str,
-    ) -> io::Result<()> {
-        flush(self).await?;
-        dao::delete_code_without_source(self.conn, code, source_code).await
-    }
-
-    async fn delete_code_without_target(
-        &mut self,
-        code: &str,
-        target_code: &str,
-    ) -> io::Result<()> {
-        flush(self).await?;
-        dao::delete_code_without_target(self.conn, code, target_code).await
     }
 
     async fn commit(&mut self) -> io::Result<()> {

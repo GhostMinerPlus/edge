@@ -3,7 +3,7 @@ mod inc;
 use serde::Deserialize;
 use std::io;
 
-use crate::{data::AsDataManager, mem_table::new_point};
+use crate::data::{AsDataManager, Edge};
 
 #[async_recursion::async_recursion]
 async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Result<Vec<String>> {
@@ -35,9 +35,11 @@ async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Res
 
 async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
     if value == "?" {
-        Ok(new_point())
+        Ok(uuid::Uuid::new_v4().to_string())
     } else if value == "$" {
         Ok(root.to_string())
+    } else if value == "_" {
+        Ok("".to_string())
     } else if value.starts_with("$<-") {
         Ok(format!("{root}{}", &value[1..]))
     } else if value.starts_with("$->") {
@@ -48,9 +50,6 @@ async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
 }
 
 async fn asign(dm: &mut impl AsDataManager, output: &str, item_v: Vec<String>) -> io::Result<()> {
-    if item_v.is_empty() {
-        return Ok(());
-    }
     let mut output_path = Path::from_str(output);
     let last_step = output_path.step_v.pop().unwrap();
     let root_v = get_all_by_path(dm, output_path).await?;
@@ -58,14 +57,24 @@ async fn asign(dm: &mut impl AsDataManager, output: &str, item_v: Vec<String>) -
         for source in &root_v {
             dm.clear(source, &last_step.code).await?;
             for target in &item_v {
-                dm.insert_edge(source, &last_step.code, target).await?;
+                dm.insert_edge_v(&vec![Edge {
+                    source: source.clone(),
+                    code: last_step.code.clone(),
+                    target: target.clone(),
+                }])
+                .await?;
             }
         }
     } else {
         for target in &root_v {
             dm.rclear(&last_step.code, target).await?;
             for source in &item_v {
-                dm.insert_edge(source, &last_step.code, target).await?;
+                dm.insert_edge_v(&vec![Edge {
+                    source: source.clone(),
+                    code: last_step.code.clone(),
+                    target: target.clone(),
+                }])
+                .await?;
             }
         }
     }
@@ -95,12 +104,12 @@ async fn invoke_inc(dm: &mut impl AsDataManager, root: &mut String, inc: &Inc) -
         "=" => inc::set(dm, input_item_v, input1_item_v).await?,
         "+" => inc::add(dm, input_item_v, input1_item_v).await?,
         "-" => inc::minus(dm, input_item_v, input1_item_v).await?,
+        "append" => inc::append(dm, input_item_v, input1_item_v).await?,
         "new" => inc::new(dm, input_item_v, input1_item_v).await?,
         "sort" => inc::sort(dm, input_item_v, input1_item_v).await?,
-        "dump" => inc::dump(dm, input_item_v, input1_item_v).await?,
         _ => {
             let inc_v = dump_inc_v(dm, &inc.function).await?;
-            let new_root = format!("${}", new_point());
+            let new_root = format!("${}", uuid::Uuid::new_v4().to_string());
             asign(dm, &format!("{new_root}->$input"), input_item_v).await?;
             asign(dm, &format!("{new_root}->$input1"), input1_item_v).await?;
             log::debug!("inc_v.len(): {}", inc_v.len());
@@ -244,8 +253,8 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        data::AsDataManager,
-        mem_table::{new_point, MemTable},
+        data::{AsDataManager, Edge},
+        mem_table::MemTable,
     };
 
     use super::{AsEdgeEngine, EdgeEngine, Inc};
@@ -263,14 +272,12 @@ mod tests {
     }
 
     impl AsDataManager for FakeDataManager {
-        fn insert_edge(
-            &mut self,
-            source: &str,
-            code: &str,
-            target: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
-            let id = self.mem_table.insert_edge(source, code, target);
-            async { Ok(id) }
+        async fn insert_edge_v(&mut self, edge_v: &Vec<Edge>) -> std::io::Result<()> {
+            for edge in edge_v {
+                self.mem_table
+                    .insert_edge(&edge.source, &edge.code, &edge.target);
+            }
+            Ok(())
         }
 
         fn clear(
@@ -323,31 +330,7 @@ mod tests {
             Ok(self.mem_table.get_target_v_unchecked(source, code))
         }
 
-        async fn dump(
-            &mut self,
-            _path: &str,
-            _item_v: &Vec<String>,
-        ) -> std::io::Result<json::Array> {
-            todo!()
-        }
-
         async fn commit(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-
-        async fn delete_code_without_source(
-            &mut self,
-            _code: &str,
-            _source_code: &str,
-        ) -> std::io::Result<()> {
-            Ok(())
-        }
-
-        async fn delete_code_without_target(
-            &mut self,
-            _code: &str,
-            _target_code: &str,
-        ) -> std::io::Result<()> {
             Ok(())
         }
 
@@ -368,7 +351,7 @@ mod tests {
     fn test() {
         let task = async {
             let dm = FakeDataManager::new();
-            let mut root = new_point();
+            let mut root = uuid::Uuid::new_v4().to_string();
             let inc_v = vec![
                 Inc {
                     output: "$->$left".to_string(),

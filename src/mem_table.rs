@@ -1,6 +1,6 @@
-use std::{collections::HashMap, mem::take};
+use std::{collections::BTreeMap, mem::take};
 
-fn insert(mp: &mut HashMap<(String, String), Vec<String>>, k: (String, String), v: String) {
+fn insert(mp: &mut BTreeMap<(String, String), Vec<u64>>, k: (String, String), v: u64) {
     if let Some(uuid_v) = mp.get_mut(&k) {
         uuid_v.push(v);
     } else {
@@ -8,11 +8,12 @@ fn insert(mp: &mut HashMap<(String, String), Vec<String>>, k: (String, String), 
     }
 }
 
-// Public
-pub fn new_point() -> String {
-    uuid::Uuid::new_v4().to_string()
+fn next_id(id: &mut u64) -> u64 {
+    *id = *id + 1;
+    *id
 }
 
+// Public
 #[derive(Clone)]
 pub struct Edge {
     pub source: String,
@@ -22,43 +23,44 @@ pub struct Edge {
 }
 
 pub struct MemTable {
-    edge_mp: HashMap<String, Edge>,
-    inx_source_code: HashMap<(String, String), Vec<String>>,
-    inx_code_target: HashMap<(String, String), Vec<String>>,
+    id: u64,
+    edge_mp: BTreeMap<u64, Edge>,
+    inx_source_code: BTreeMap<(String, String), Vec<u64>>,
+    inx_code_target: BTreeMap<(String, String), Vec<u64>>,
 }
 
 impl MemTable {
     pub fn new() -> Self {
         Self {
-            edge_mp: HashMap::new(),
-            inx_source_code: HashMap::new(),
-            inx_code_target: HashMap::new(),
+            id: 0,
+            edge_mp: BTreeMap::new(),
+            inx_source_code: BTreeMap::new(),
+            inx_code_target: BTreeMap::new(),
         }
     }
 
     pub fn append_exists_edge(&mut self, source: &str, code: &str, target: &str) {
-        let uuid = new_point();
         let edge = Edge {
             source: source.to_string(),
             code: code.to_string(),
             target: target.to_string(),
             is_temp: true,
         };
-        self.edge_mp.insert(uuid.to_string(), edge);
+        self.edge_mp.insert(self.id, edge);
         insert(
             &mut self.inx_source_code,
             (source.to_string(), code.to_string()),
-            uuid.to_string(),
+            next_id(&mut self.id),
         );
         insert(
             &mut self.inx_code_target,
             (code.to_string(), target.to_string()),
-            uuid.to_string(),
+            next_id(&mut self.id),
         );
     }
 
-    pub fn insert_edge(&mut self, source: &str, code: &str, target: &str) -> String {
-        let uuid = new_point();
+    pub fn insert_edge(&mut self, source: &str, code: &str, target: &str) -> u64 {
+        let uuid = next_id(&mut self.id);
         let edge = Edge {
             source: source.to_string(),
             code: code.to_string(),
@@ -79,8 +81,8 @@ impl MemTable {
         uuid
     }
 
-    pub fn insert_temp_edge(&mut self, source: &str, code: &str, target: &str) -> String {
-        let uuid = new_point();
+    pub fn insert_temp_edge(&mut self, source: &str, code: &str, target: &str) -> u64 {
+        let uuid = next_id(&mut self.id);
         let edge = Edge {
             source: source.to_string(),
             code: code.to_string(),
@@ -154,7 +156,8 @@ impl MemTable {
         }
     }
 
-    pub fn take(&mut self) -> HashMap<String, Edge> {
+    pub fn take(&mut self) -> BTreeMap<u64, Edge> {
+        self.id = 0;
         self.inx_source_code.clear();
         self.inx_code_target.clear();
         take(&mut self.edge_mp)
@@ -163,8 +166,8 @@ impl MemTable {
             .collect()
     }
 
-    pub fn take_some(&mut self) -> HashMap<String, Edge> {
-        let edge_mp: HashMap<String, Edge> = self
+    pub fn take_some(&mut self) -> BTreeMap<u64, Edge> {
+        let edge_mp: BTreeMap<u64, Edge> = self
             .edge_mp
             .clone()
             .into_iter()
