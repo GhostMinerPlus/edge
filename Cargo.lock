@@ -432,6 +432,7 @@ dependencies = [
  "env_logger",
  "json",
  "log",
+ "rand",
  "reqwest",
  "rust_decimal",
  "serde",
