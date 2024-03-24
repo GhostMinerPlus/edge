@@ -8,7 +8,11 @@ use crate::data::{AsDataManager, Edge};
 #[async_recursion::async_recursion]
 async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Result<Vec<String>> {
     if path.step_v.is_empty() {
-        return Ok(vec![path.root.clone()]);
+        if path.root.is_empty() {
+            return Ok(Vec::new());
+        } else {
+            return Ok(vec![path.root.clone()]);
+        }
     }
     let root = path.root.clone();
     let step = path.step_v.remove(0);
@@ -101,12 +105,32 @@ async fn invoke_inc(dm: &mut impl AsDataManager, root: &mut String, inc: &Inc) -
     let input_item_v = get_all_by_path(dm, Path::from_str(&inc.input)).await?;
     let input1_item_v = get_all_by_path(dm, Path::from_str(&inc.input1)).await?;
     let rs = match inc.function.as_str() {
-        "=" => inc::set(dm, input_item_v, input1_item_v).await?,
+        //
+        "new" => inc::new(dm, input_item_v, input1_item_v).await?,
+        "line" => inc::line(dm, input_item_v, input1_item_v).await?,
+        "rand" => inc::rand(dm, input_item_v, input1_item_v).await?,
+        //
+        "append" => inc::append(dm, input_item_v, input1_item_v).await?,
+        "distinct" => inc::distinct(dm, input_item_v, input1_item_v).await?,
+        "left" => inc::left(dm, input_item_v, input1_item_v).await?,
+        "inner" => inc::inner(dm, input_item_v, input1_item_v).await?,
+        //
         "+" => inc::add(dm, input_item_v, input1_item_v).await?,
         "-" => inc::minus(dm, input_item_v, input1_item_v).await?,
-        "append" => inc::append(dm, input_item_v, input1_item_v).await?,
-        "new" => inc::new(dm, input_item_v, input1_item_v).await?,
+        "*" => inc::mul(dm, input_item_v, input1_item_v).await?,
+        "/" => inc::div(dm, input_item_v, input1_item_v).await?,
+        "%" => inc::rest(dm, input_item_v, input1_item_v).await?,
+        //
+        "==" => inc::equal(dm, input_item_v, input1_item_v).await?,
+        ">" => inc::greater(dm, input_item_v, input1_item_v).await?,
+        "<" => inc::smaller(dm, input_item_v, input1_item_v).await?,
+        //
         "sort" => inc::sort(dm, input_item_v, input1_item_v).await?,
+        //
+        "count" => inc::count(dm, input_item_v, input1_item_v).await?,
+        "sum" => inc::sum(dm, input_item_v, input1_item_v).await?,
+        //
+        "=" => inc::set(dm, input_item_v, input1_item_v).await?,
         _ => {
             let inc_v = dump_inc_v(dm, &inc.function).await?;
             let new_root = format!("${}", uuid::Uuid::new_v4().to_string());
@@ -170,6 +194,12 @@ fn find_arrrow(path: &str) -> usize {
 
 impl Path {
     pub fn from_str(path: &str) -> Self {
+        if path.is_empty() {
+            return Path {
+                root: String::new(),
+                step_v: Vec::new(),
+            };
+        }
         log::debug!("Path::from_str: {path}");
         if path.starts_with('"') {
             return Self {
@@ -340,10 +370,6 @@ mod tests {
             _target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
             async { todo!() }
-        }
-
-        async fn flush(&mut self) -> std::io::Result<()> {
-            todo!()
         }
     }
 
