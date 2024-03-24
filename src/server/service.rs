@@ -5,14 +5,14 @@ use std::{
     sync::Arc,
 };
 
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, http::StatusCode};
 use sqlx::Acquire;
 
 use crate::app::AppState;
 
 pub async fn http_execute(
     State(state): State<Arc<AppState>>,
-    Json(script_v): Json<Vec<String>>,
+    script_vn: String,
 ) -> (StatusCode, String) {
     match (|| async {
         let mut tr = state
@@ -26,7 +26,7 @@ pub async fn http_execute(
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
         let mut mem_table = state.mem_table.lock().await;
         // Execute
-        let r = match edge_service::execute(conn, &mut mem_table, &script_v).await {
+        let r = match edge_service::execute(conn, &mut mem_table, &json::parse(&script_vn).unwrap()).await {
             Ok(r) => r,
             Err(e) => {
                 let _ = tr.rollback().await;
