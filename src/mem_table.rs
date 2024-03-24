@@ -166,28 +166,6 @@ impl MemTable {
             .collect()
     }
 
-    pub fn take_some(&mut self) -> BTreeMap<u64, Edge> {
-        let edge_mp: BTreeMap<u64, Edge> = self
-            .edge_mp
-            .clone()
-            .into_iter()
-            .filter(|(_, edge)| edge.is_temp)
-            .collect();
-
-        self.inx_source_code.clear();
-        self.inx_code_target.clear();
-        let r = take(&mut self.edge_mp)
-            .into_iter()
-            .filter(|(_, edge)| !edge.is_temp)
-            .collect();
-
-        for (_, edge) in &edge_mp {
-            self.insert_temp_edge(&edge.source, &edge.code, &edge.target);
-        }
-
-        r
-    }
-
     pub fn delete_edge_with_source_code(&mut self, source: &str, code: &str) {
         if let Some(uuid_v) = self
             .inx_source_code

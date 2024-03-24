@@ -341,10 +341,6 @@ mod tests {
         ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
             async { todo!() }
         }
-
-        async fn flush(&mut self) -> std::io::Result<()> {
-            todo!()
-        }
     }
 
     #[test]

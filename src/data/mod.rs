@@ -10,10 +10,6 @@ fn is_temp(source: &str, code: &str, target: &str) -> bool {
     source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
 }
 
-async fn flush(dm: &mut DataManager<'_>) -> io::Result<()> {
-    dao::insert_edge_mp(dm.conn, &dm.mem_table.take_some()).await
-}
-
 async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
     dao::insert_edge_mp(dm.conn, &dm.mem_table.take()).await
 }
@@ -75,8 +71,6 @@ pub trait AsDataManager: Send {
     ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
 
     async fn commit(&mut self) -> io::Result<()>;
-
-    async fn flush(&mut self) -> io::Result<()>;
 }
 
 pub struct DataManager<'a> {
@@ -141,28 +135,32 @@ impl<'a> AsDataManager for DataManager<'a> {
     }
 
     async fn get_target_v(&mut self, source: &str, code: &str) -> io::Result<Vec<String>> {
-        if is_temp(source, code, "") {
-            Ok(self.mem_table.get_target_v_unchecked(source, code))
+        let r = self.mem_table.get_target_v_unchecked(source, code);
+        if r.is_empty() {
+            let r = dao::get_target_v(&mut self.conn, source, code).await?;
+            for target in &r {
+                self.mem_table.append_exists_edge(source, code, target);
+            }
+            Ok(r)
         } else {
-            flush(self).await?;
-            dao::get_target_v(&mut self.conn, source, code).await
+            Ok(r)
         }
     }
 
     async fn get_source_v(&mut self, code: &str, target: &str) -> io::Result<Vec<String>> {
-        if is_temp("", code, target) {
-            Ok(self.mem_table.get_source_v_unchecked(code, target))
+        let r = self.mem_table.get_source_v_unchecked(code, target);
+        if r.is_empty() {
+            let r = dao::get_source_v(&mut self.conn, code, target).await?;
+            for source in &r {
+                self.mem_table.append_exists_edge(source, code, target);
+            }
+            Ok(r)
         } else {
-            flush(self).await?;
-            dao::get_source_v(&mut self.conn, code, target).await
+            Ok(r)
         }
     }
 
     async fn commit(&mut self) -> io::Result<()> {
         commit(self).await
-    }
-
-    async fn flush(&mut self) -> io::Result<()> {
-        flush(self).await
     }
 }
