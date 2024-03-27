@@ -255,7 +255,8 @@ async fn execute(
     }
 }
 
-fn parse_script(script: &str) -> io::Result<Vec<Inc>> {
+// Public
+pub fn parse_script(script: &str) -> io::Result<Vec<Inc>> {
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {
@@ -281,7 +282,19 @@ fn parse_script(script: &str) -> io::Result<Vec<Inc>> {
     Ok(inc_v)
 }
 
-// Public
+pub fn unparse_script(inc_v: &Vec<Inc>) -> String {
+    inc_v
+        .into_iter()
+        .map(|inc| {
+            format!(
+                "{} {} {} {} {}",
+                inc.output, inc.operator, inc.function, inc.input, inc.input1
+            )
+        })
+        .reduce(|acc, item| format!("{acc}\n{item}"))
+        .unwrap()
+}
+
 #[derive(Clone)]
 pub struct Step {
     pub arrow: String,
@@ -346,6 +359,12 @@ pub struct Inc {
 pub trait AsEdgeEngine {
     async fn execute(&mut self, script_tree: &json::JsonValue) -> io::Result<json::JsonValue>;
 
+    async fn require(
+        &mut self,
+        target: &Vec<Inc>,
+        constraint: &Vec<Inc>,
+    ) -> io::Result<Vec<Vec<Inc>>>;
+
     async fn commit(&mut self) -> io::Result<()>;
 }
 
@@ -364,6 +383,14 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
         let mut out_tree = json::object! {};
         execute(&mut self.dm, "", &script_tree, &mut out_tree).await?;
         Ok(out_tree)
+    }
+
+    async fn require(
+        &mut self,
+        target: &Vec<Inc>,
+        constraint: &Vec<Inc>,
+    ) -> io::Result<Vec<Vec<Inc>>> {
+        todo!()
     }
 
     async fn commit(&mut self) -> io::Result<()> {
