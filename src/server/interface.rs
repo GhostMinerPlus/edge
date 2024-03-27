@@ -4,9 +4,12 @@ use axum::{extract::State, http::StatusCode, Json};
 use serde::Deserialize;
 use sqlx::Acquire;
 
-use crate::{app::AppState, err::{Error, ErrorKind}};
+use crate::{
+    app::AppState,
+    err::{Error, ErrorKind},
+};
 
-mod edge_service;
+use super::edge_service;
 
 // Public
 #[derive(Deserialize)]

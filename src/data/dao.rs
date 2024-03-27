@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use sqlx::{MySqlConnection, Row};
 
 use crate::{
+    data::mem_table::Edge,
     err::{Error, ErrorKind, Result},
-    mem_table::Edge,
 };
 
 // Public
@@ -71,11 +71,7 @@ pub async fn insert_edge_mp(
     Ok(())
 }
 
-pub async fn get_target(
-    conn: &mut MySqlConnection,
-    source: &str,
-    code: &str,
-) -> Result<String> {
+pub async fn get_target(conn: &mut MySqlConnection, source: &str, code: &str) -> Result<String> {
     let row =
         sqlx::query("select target from edge_t where source=? and code=?  order by id limit 1")
             .bind(source)
@@ -125,11 +121,7 @@ pub async fn get_source_v(
     Ok(arr)
 }
 
-pub async fn get_source(
-    conn: &mut MySqlConnection,
-    code: &str,
-    target: &str,
-) -> Result<String> {
+pub async fn get_source(conn: &mut MySqlConnection, code: &str, target: &str) -> Result<String> {
     let row =
         sqlx::query("select source from edge_t where code=? and target=?  order by id limit 1")
             .bind(code)

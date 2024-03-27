@@ -7,22 +7,23 @@ use tokio::sync::Mutex;
 
 use crate::{
     app,
+    data::mem_table,
     err::{Error, ErrorKind, Result},
-    mem_table,
 };
 
-mod service;
+mod edge_service;
+mod interface;
 
 async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> Result<()> {
     // build our application with a route
     let app = Router::new()
         .route(
             &format!("/{}/execute", name),
-            routing::post(service::http_execute),
+            routing::post(interface::http_execute),
         )
         .route(
             &format!("/{}/require", name),
-            routing::post(service::http_require),
+            routing::post(interface::http_require),
         )
         .with_state(Arc::new(app::AppState {
             pool: sqlx::Pool::connect(db_url)

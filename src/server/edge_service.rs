@@ -1,10 +1,10 @@
 use sqlx::MySqlConnection;
 
 use crate::{
+    data::mem_table::MemTable,
     data::DataManager,
-    edge::{parse_script, unparse_script, AsEdgeEngine, EdgeEngine},
+    engine::{parser, AsEdgeEngine, EdgeEngine},
     err::Result,
-    mem_table::MemTable,
 };
 
 // Public
@@ -29,9 +29,15 @@ pub async fn require(
     let dm = DataManager::new(conn, mem_table);
     let mut edge_engine = EdgeEngine::new(dm);
     let rs = edge_engine
-        .require(&parse_script(target)?, &parse_script(constraint)?)
+        .require(
+            &parser::parse_script(target)?,
+            &parser::parse_script(constraint)?,
+        )
         .await?;
 
     edge_engine.commit().await?;
-    Ok(rs.into_iter().map(|inc| unparse_script(&inc)).collect())
+    Ok(rs
+        .into_iter()
+        .map(|inc| parser::unparse_script(&inc))
+        .collect())
 }

@@ -4,10 +4,9 @@ use serde::{Deserialize, Serialize};
 
 mod app;
 mod data;
-mod edge;
-mod mem_table;
-mod server;
+mod engine;
 mod err;
+mod server;
 
 #[derive(Debug, Deserialize, Serialize, Clone, AsConfig)]
 struct Config {

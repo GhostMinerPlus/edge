@@ -1,18 +1,11 @@
 use sqlx::MySqlConnection;
 
-use crate::{
-    err::Result,
-    mem_table::MemTable
-};
+use crate::err::Result;
 
 mod dao;
 
 fn is_temp(source: &str, code: &str, target: &str) -> bool {
     source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
-}
-
-async fn commit(dm: &mut DataManager<'_>) -> Result<()> {
-    dao::insert_edge_mp(dm.conn, &dm.mem_table.take()).await
 }
 
 async fn clear(dm: &mut DataManager<'_>, source: &str, code: &str) -> Result<()> {
@@ -32,6 +25,8 @@ async fn rclear(dm: &mut DataManager<'_>, code: &str, target: &str) -> Result<()
 }
 
 // Public
+pub mod mem_table;
+
 pub trait AsDataManager: Send {
     fn append_target_v(
         &mut self,
@@ -94,11 +89,11 @@ pub trait AsDataManager: Send {
 
 pub struct DataManager<'a> {
     conn: &'a mut MySqlConnection,
-    mem_table: &'a mut MemTable,
+    mem_table: &'a mut mem_table::MemTable,
 }
 
 impl<'a> DataManager<'a> {
-    pub fn new(conn: &'a mut MySqlConnection, mem_table: &'a mut MemTable) -> Self {
+    pub fn new(conn: &'a mut MySqlConnection, mem_table: &'a mut mem_table::MemTable) -> Self {
         Self { conn, mem_table }
     }
 }
@@ -227,6 +222,6 @@ impl<'a> AsDataManager for DataManager<'a> {
     }
 
     async fn commit(&mut self) -> Result<()> {
-        commit(self).await
+        dao::insert_edge_mp(self.conn, &self.mem_table.take()).await
     }
 }

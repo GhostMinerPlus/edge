@@ -1,8 +1,11 @@
-use std::{cmp::min, collections::HashSet};
+use std::{cmp, collections::HashSet};
 
 use rand::random;
 
-use crate::{data::AsDataManager, err::{Error, ErrorKind, Result}};
+use crate::{
+    data::AsDataManager,
+    err::{Error, ErrorKind, Result},
+};
 
 // Public
 pub async fn append(
@@ -82,7 +85,7 @@ pub async fn add(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         let left = input_item_v[i].parse::<f64>();
@@ -104,7 +107,7 @@ pub async fn minus(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         let left = input_item_v[i].parse::<f64>();
@@ -126,7 +129,7 @@ pub async fn mul(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         let left = input_item_v[i].parse::<f64>();
@@ -148,7 +151,7 @@ pub async fn div(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         let left = input_item_v[i].parse::<f64>();
@@ -170,7 +173,7 @@ pub async fn rest(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         let left = input_item_v[i].parse::<i64>();
@@ -192,7 +195,7 @@ pub async fn equal(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         if input_item_v[i] == input1_item_v[i] {
@@ -207,7 +210,7 @@ pub async fn greater(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         let left = input_item_v[i].parse::<f64>();
@@ -230,7 +233,7 @@ pub async fn smaller(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    let sz = min(input_item_v.len(), input1_item_v.len());
+    let sz = cmp::min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
         let left = input_item_v[i].parse::<f64>();
@@ -253,7 +256,7 @@ pub async fn new(
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
 ) -> Result<Vec<String>> {
-    if min(input_item_v.len(), input1_item_v.len()) != 1 {
+    if cmp::min(input_item_v.len(), input1_item_v.len()) != 1 {
         return Err(Error::new(ErrorKind::Other, "need 1 but not".to_string()));
     }
     let sz = input_item_v[0]

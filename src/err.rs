@@ -16,10 +16,7 @@ pub struct Error {
 
 impl Error {
     pub fn new(kind: ErrorKind, msg: String) -> Error {
-        Error {
-            kind,
-            msg,
-        }
+        Error { kind, msg }
     }
 }
 
