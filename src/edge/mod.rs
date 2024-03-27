@@ -3,7 +3,7 @@ mod inc;
 use serde::Deserialize;
 use std::io;
 
-use crate::data::{AsDataManager, Edge};
+use crate::data::AsDataManager;
 
 #[async_recursion::async_recursion]
 async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Result<Vec<String>> {
@@ -65,29 +65,17 @@ async fn asign(
     if last_step.arrow == "->" {
         for source in &root_v {
             if operator == "=" {
-                dm.clear(source, &last_step.code).await?;
-            }
-            for target in &item_v {
-                dm.insert_edge_v(&vec![Edge {
-                    source: source.clone(),
-                    code: last_step.code.clone(),
-                    target: target.clone(),
-                }])
-                .await?;
+                dm.set_target_v(source, &last_step.code, &item_v).await?;
+            } else {
+                dm.append_target_v(source, &last_step.code, &item_v).await?;
             }
         }
     } else {
         for target in &root_v {
             if operator == "=" {
-                dm.rclear(&last_step.code, target).await?;
-            }
-            for source in &item_v {
-                dm.insert_edge_v(&vec![Edge {
-                    source: source.clone(),
-                    code: last_step.code.clone(),
-                    target: target.clone(),
-                }])
-                .await?;
+                dm.set_source_v(&item_v, &last_step.code, target).await?;
+            } else {
+                dm.append_source_v(&item_v, &last_step.code, target).await?;
             }
         }
     }
@@ -237,11 +225,12 @@ async fn execute(
     if let json::JsonValue::Object(script_tree) = script_tree {
         for (script, v) in script_tree.iter() {
             let root = format!("${}", uuid::Uuid::new_v4().to_string());
-            dm.insert_edge_v(&vec![Edge {
-                source: root.clone(),
-                code: "$input".to_string(),
-                target: input.to_string(),
-            }])
+            asign(
+                dm,
+                &format!("{root}->$input"),
+                "+=",
+                vec![input.to_string()],
+            )
             .await?;
             let rs = invoke_inc_v(dm, &root, &parse_script(script)?).await?;
             if v.is_empty() {
@@ -384,12 +373,15 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        data::{AsDataManager, Edge},
-        mem_table::MemTable,
-    };
+    use std::io;
+
+    use crate::{data::AsDataManager, mem_table::MemTable};
 
     use super::{AsEdgeEngine, EdgeEngine};
+
+    fn is_temp(source: &str, code: &str, target: &str) -> bool {
+        source.starts_with('$') || code.starts_with('$') || target.starts_with('$')
+    }
 
     struct FakeDataManager {
         mem_table: MemTable,
@@ -404,32 +396,6 @@ mod tests {
     }
 
     impl AsDataManager for FakeDataManager {
-        async fn insert_edge_v(&mut self, edge_v: &Vec<Edge>) -> std::io::Result<()> {
-            for edge in edge_v {
-                self.mem_table
-                    .insert_edge(&edge.source, &edge.code, &edge.target);
-            }
-            Ok(())
-        }
-
-        fn clear(
-            &mut self,
-            source: &str,
-            code: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
-            self.mem_table.delete_edge_with_source_code(source, code);
-            async { Ok(()) }
-        }
-
-        fn rclear(
-            &mut self,
-            code: &str,
-            target: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
-            self.mem_table.delete_edge_with_code_target(code, target);
-            async { Ok(()) }
-        }
-
         fn get_target(
             &mut self,
             source: &str,
@@ -472,6 +438,72 @@ mod tests {
             _target: &str,
         ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
             async { todo!() }
+        }
+
+        async fn append_target_v(
+            &mut self,
+            source: &str,
+            code: &str,
+            target_v: &Vec<String>,
+        ) -> io::Result<()> {
+            for target in target_v {
+                if is_temp(source, code, target) {
+                    self.mem_table.insert_temp_edge(source, code, target);
+                } else {
+                    self.mem_table.insert_edge(source, code, target);
+                }
+            }
+            Ok(())
+        }
+
+        async fn append_source_v(
+            &mut self,
+            source_v: &Vec<String>,
+            code: &str,
+            target: &str,
+        ) -> io::Result<()> {
+            for source in source_v {
+                if is_temp(source, code, target) {
+                    self.mem_table.insert_temp_edge(source, code, target);
+                } else {
+                    self.mem_table.insert_edge(source, code, target);
+                }
+            }
+            Ok(())
+        }
+
+        async fn set_target_v(
+            &mut self,
+            source: &str,
+            code: &str,
+            target_v: &Vec<String>,
+        ) -> io::Result<()> {
+            self.mem_table.delete_edge_with_source_code(source, code);
+            for target in target_v {
+                if is_temp(source, code, target) {
+                    self.mem_table.insert_temp_edge(source, code, target);
+                } else {
+                    self.mem_table.insert_edge(source, code, target);
+                }
+            }
+            Ok(())
+        }
+
+        async fn set_source_v(
+            &mut self,
+            source_v: &Vec<String>,
+            code: &str,
+            target: &str,
+        ) -> io::Result<()> {
+            self.mem_table.delete_edge_with_code_target(code, target);
+            for source in source_v {
+                if is_temp(source, code, target) {
+                    self.mem_table.insert_temp_edge(source, code, target);
+                } else {
+                    self.mem_table.insert_edge(source, code, target);
+                }
+            }
+            Ok(())
         }
     }
 
