@@ -14,30 +14,48 @@ async fn commit(dm: &mut DataManager<'_>) -> io::Result<()> {
     dao::insert_edge_mp(dm.conn, &dm.mem_table.take()).await
 }
 
-// Public
-pub struct Edge {
-    pub source: String,
-    pub code: String,
-    pub target: String,
+async fn clear(dm: &mut DataManager<'_>, source: &str, code: &str) -> io::Result<()> {
+    dm.mem_table.delete_edge_with_source_code(source, code);
+    if !is_temp(source, code, "") {
+        dao::delete_edge_with_source_code(&mut dm.conn, source, code).await?;
+    }
+    Ok(())
 }
 
-pub trait AsDataManager: Send {
-    /// Insert a new edge
-    fn insert_edge_v(
-        &mut self,
-        edge_v: &Vec<Edge>,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
+async fn rclear(dm: &mut DataManager<'_>, code: &str, target: &str) -> io::Result<()> {
+    dm.mem_table.delete_edge_with_code_target(code, target);
+    if !is_temp("", code, target) {
+        dao::delete_edge_with_code_target(&mut dm.conn, code, target).await?;
+    }
+    Ok(())
+}
 
-    /// Clear all edge with `source` and `code` and insert a new edge
-    fn clear(
+// Public
+pub trait AsDataManager: Send {
+    fn append_target_v(
         &mut self,
         source: &str,
         code: &str,
+        target_v: &Vec<String>,
     ) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
-    /// Clear all edge with `source` and `code` and insert a new edge
-    fn rclear(
+    fn append_source_v(
         &mut self,
+        source_v: &Vec<String>,
+        code: &str,
+        target: &str,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
+
+    fn set_target_v(
+        &mut self,
+        source: &str,
+        code: &str,
+        target_v: &Vec<String>,
+    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
+
+    fn set_source_v(
+        &mut self,
+        source_v: &Vec<String>,
         code: &str,
         target: &str,
     ) -> impl std::future::Future<Output = io::Result<()>> + Send;
@@ -85,31 +103,80 @@ impl<'a> DataManager<'a> {
 }
 
 impl<'a> AsDataManager for DataManager<'a> {
-    async fn insert_edge_v(&mut self, edge_v: &Vec<Edge>) -> io::Result<()> {
-        for edge in edge_v {
-            if is_temp(&edge.source, &edge.code, &edge.target) {
-                self.mem_table
-                    .insert_temp_edge(&edge.source, &edge.code, &edge.target);
+    async fn append_target_v(
+        &mut self,
+        source: &str,
+        code: &str,
+        target_v: &Vec<String>,
+    ) -> io::Result<()> {
+        if !is_temp(source, code, "") && self.mem_table.get_target(source, code).is_none() {
+            let r = dao::get_target_v(&mut self.conn, source, code).await?;
+            for target in &r {
+                self.mem_table.append_exists_edge(source, code, target);
+            }
+        }
+        for target in target_v {
+            if is_temp(source, code, target) {
+                self.mem_table.insert_temp_edge(source, code, target);
             } else {
-                self.mem_table
-                    .insert_edge(&edge.source, &edge.code, &edge.target);
+                self.mem_table.insert_edge(source, code, target);
             }
         }
         Ok(())
     }
 
-    async fn clear(&mut self, source: &str, code: &str) -> io::Result<()> {
-        self.mem_table.delete_edge_with_source_code(source, code);
-        if !is_temp(source, code, "") {
-            dao::delete_edge_with_source_code(&mut self.conn, source, code).await?;
+    async fn append_source_v(
+        &mut self,
+        source_v: &Vec<String>,
+        code: &str,
+        target: &str,
+    ) -> io::Result<()> {
+        if !is_temp("", code, target) && self.mem_table.get_source(code, target).is_none() {
+            let r = dao::get_source_v(&mut self.conn, code, target).await?;
+            for source in &r {
+                self.mem_table.append_exists_edge(source, code, target);
+            }
+        }
+        for source in source_v {
+            if is_temp(source, code, target) {
+                self.mem_table.insert_temp_edge(source, code, target);
+            } else {
+                self.mem_table.insert_edge(source, code, target);
+            }
         }
         Ok(())
     }
 
-    async fn rclear(&mut self, code: &str, target: &str) -> io::Result<()> {
-        self.mem_table.delete_edge_with_code_target(code, target);
-        if !is_temp("", code, target) {
-            dao::delete_edge_with_code_target(&mut self.conn, code, target).await?;
+    async fn set_target_v(
+        &mut self,
+        source: &str,
+        code: &str,
+        target_v: &Vec<String>,
+    ) -> io::Result<()> {
+        clear(self, source, code).await?;
+        for target in target_v {
+            if is_temp(source, code, target) {
+                self.mem_table.insert_temp_edge(source, code, target);
+            } else {
+                self.mem_table.insert_edge(source, code, target);
+            }
+        }
+        Ok(())
+    }
+
+    async fn set_source_v(
+        &mut self,
+        source_v: &Vec<String>,
+        code: &str,
+        target: &str,
+    ) -> io::Result<()> {
+        rclear(self, code, target).await?;
+        for source in source_v {
+            if is_temp(source, code, target) {
+                self.mem_table.insert_temp_edge(source, code, target);
+            } else {
+                self.mem_table.insert_edge(source, code, target);
+            }
         }
         Ok(())
     }
