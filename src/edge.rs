@@ -1,12 +1,14 @@
 mod inc;
 
 use serde::Deserialize;
-use std::io;
 
-use crate::data::AsDataManager;
+use crate::{
+    data::AsDataManager,
+    err::{Error, ErrorKind, Result},
+};
 
 #[async_recursion::async_recursion]
-async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Result<Vec<String>> {
+async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> Result<Vec<String>> {
     if path.step_v.is_empty() {
         if path.root.is_empty() {
             return Ok(Vec::new());
@@ -37,7 +39,7 @@ async fn get_all_by_path(dm: &mut impl AsDataManager, mut path: Path) -> io::Res
     Ok(rs)
 }
 
-async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
+async fn unwrap_value(root: &str, value: &str) -> Result<String> {
     if value == "?" {
         Ok(uuid::Uuid::new_v4().to_string())
     } else if value == "$" {
@@ -58,7 +60,7 @@ async fn asign(
     output: &str,
     operator: &str,
     item_v: Vec<String>,
-) -> io::Result<()> {
+) -> Result<()> {
     let mut output_path = Path::from_str(output);
     let last_step = output_path.step_v.pop().unwrap();
     let root_v = get_all_by_path(dm, output_path).await?;
@@ -82,7 +84,7 @@ async fn asign(
     Ok(())
 }
 
-async fn dump_inc_v(dm: &mut impl AsDataManager, function: &str) -> io::Result<Vec<Inc>> {
+async fn dump_inc_v(dm: &mut impl AsDataManager, function: &str) -> Result<Vec<Inc>> {
     let inc_h_v = dm.get_target_v(function, "inc").await?;
     let mut inc_v = Vec::with_capacity(inc_h_v.len());
     for inc_h in &inc_h_v {
@@ -98,7 +100,7 @@ async fn dump_inc_v(dm: &mut impl AsDataManager, function: &str) -> io::Result<V
 }
 
 #[async_recursion::async_recursion]
-async fn invoke_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<()> {
+async fn invoke_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> Result<()> {
     log::debug!("invoke_inc: {:?}", inc);
     let input_item_v = get_all_by_path(dm, Path::from_str(&inc.input)).await?;
     let input1_item_v = get_all_by_path(dm, Path::from_str(&inc.input1)).await?;
@@ -145,16 +147,16 @@ async fn invoke_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::R
     asign(dm, &inc.output, &inc.operator, rs).await
 }
 
-async fn get_one(dm: &mut impl AsDataManager, root: &str, id: &str) -> io::Result<String> {
+async fn get_one(dm: &mut impl AsDataManager, root: &str, id: &str) -> Result<String> {
     let path = unwrap_value(root, id).await?;
     let id_v = get_all_by_path(dm, Path::from_str(&path)).await?;
     if id_v.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::NotFound, "need 1 but not"));
+        return Err(Error::new(ErrorKind::Other, "Not found".to_string()));
     }
     Ok(id_v[0].clone())
 }
 
-async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<Inc> {
+async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> Result<Inc> {
     let inc = Inc {
         output: unwrap_value(root, &inc.output).await?,
         operator: get_one(dm, root, &inc.operator).await?,
@@ -187,7 +189,7 @@ async fn invoke_inc_v(
     dm: &mut impl AsDataManager,
     root: &str,
     inc_v: &Vec<Inc>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     log::debug!("inc_v.len(): {}", inc_v.len());
     for inc in inc_v {
         let inc = unwrap_inc(dm, &root, inc).await?;
@@ -218,7 +220,7 @@ async fn execute(
     input: &str,
     script_tree: &json::JsonValue,
     out_tree: &mut json::JsonValue,
-) -> io::Result<()> {
+) -> Result<()> {
     if script_tree.is_empty() {
         return Ok(());
     }
@@ -251,12 +253,12 @@ async fn execute(
     } else {
         let msg = format!("can not parse {}", script_tree);
         log::error!("{msg}");
-        Err(io::Error::new(io::ErrorKind::InvalidData, msg))
+        Err(Error::new(ErrorKind::Other, msg))
     }
 }
 
 // Public
-pub fn parse_script(script: &str) -> io::Result<Vec<Inc>> {
+pub fn parse_script(script: &str) -> Result<Vec<Inc>> {
     let mut inc_v = Vec::new();
     for line in script.lines() {
         if line.is_empty() {
@@ -266,9 +268,9 @@ pub fn parse_script(script: &str) -> io::Result<Vec<Inc>> {
         let word_v: Vec<&str> = line.split(" ").collect();
         if word_v.len() != 5 {
             log::error!("while parsing script: word_v.len() != 5");
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "while parsing script",
+            return Err(Error::new(
+                ErrorKind::InvalidScript,
+                "while parsing script".to_string(),
             ));
         }
         inc_v.push(Inc {
@@ -357,15 +359,11 @@ pub struct Inc {
 }
 
 pub trait AsEdgeEngine {
-    async fn execute(&mut self, script_tree: &json::JsonValue) -> io::Result<json::JsonValue>;
+    async fn execute(&mut self, script_tree: &json::JsonValue) -> Result<json::JsonValue>;
 
-    async fn require(
-        &mut self,
-        target: &Vec<Inc>,
-        constraint: &Vec<Inc>,
-    ) -> io::Result<Vec<Vec<Inc>>>;
+    async fn require(&mut self, target: &Vec<Inc>, constraint: &Vec<Inc>) -> Result<Vec<Vec<Inc>>>;
 
-    async fn commit(&mut self) -> io::Result<()>;
+    async fn commit(&mut self) -> Result<()>;
 }
 
 pub struct EdgeEngine<DM: AsDataManager> {
@@ -379,7 +377,7 @@ impl<DM: AsDataManager> EdgeEngine<DM> {
 }
 
 impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
-    async fn execute(&mut self, script_tree: &json::JsonValue) -> io::Result<json::JsonValue> {
+    async fn execute(&mut self, script_tree: &json::JsonValue) -> Result<json::JsonValue> {
         let mut out_tree = json::object! {};
         execute(&mut self.dm, "", &script_tree, &mut out_tree).await?;
         Ok(out_tree)
@@ -387,22 +385,20 @@ impl<DM: AsDataManager> AsEdgeEngine for EdgeEngine<DM> {
 
     async fn require(
         &mut self,
-        target: &Vec<Inc>,
-        constraint: &Vec<Inc>,
-    ) -> io::Result<Vec<Vec<Inc>>> {
-        todo!()
+        _target: &Vec<Inc>,
+        _constraint: &Vec<Inc>,
+    ) -> Result<Vec<Vec<Inc>>> {
+        Ok(Vec::new())
     }
 
-    async fn commit(&mut self) -> io::Result<()> {
+    async fn commit(&mut self) -> Result<()> {
         self.dm.commit().await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io;
-
-    use crate::{data::AsDataManager, mem_table::MemTable};
+    use crate::{data::AsDataManager, err::Result, mem_table::MemTable};
 
     use super::{AsEdgeEngine, EdgeEngine};
 
@@ -427,7 +423,7 @@ mod tests {
             &mut self,
             source: &str,
             code: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+        ) -> impl std::future::Future<Output = Result<String>> + Send {
             async {
                 if let Some(target) = self.mem_table.get_target(source, code) {
                     Ok(target)
@@ -441,7 +437,7 @@ mod tests {
             &mut self,
             code: &str,
             target: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+        ) -> impl std::future::Future<Output = Result<String>> + Send {
             async {
                 if let Some(source) = self.mem_table.get_source(code, target) {
                     Ok(source)
@@ -451,11 +447,11 @@ mod tests {
             }
         }
 
-        async fn get_target_v(&mut self, source: &str, code: &str) -> std::io::Result<Vec<String>> {
+        async fn get_target_v(&mut self, source: &str, code: &str) -> Result<Vec<String>> {
             Ok(self.mem_table.get_target_v_unchecked(source, code))
         }
 
-        async fn commit(&mut self) -> std::io::Result<()> {
+        async fn commit(&mut self) -> Result<()> {
             Ok(())
         }
 
@@ -463,7 +459,7 @@ mod tests {
             &mut self,
             _code: &str,
             _target: &str,
-        ) -> impl std::future::Future<Output = std::io::Result<Vec<String>>> + Send {
+        ) -> impl std::future::Future<Output = Result<Vec<String>>> + Send {
             async { todo!() }
         }
 
@@ -472,7 +468,7 @@ mod tests {
             source: &str,
             code: &str,
             target_v: &Vec<String>,
-        ) -> io::Result<()> {
+        ) -> Result<()> {
             for target in target_v {
                 if is_temp(source, code, target) {
                     self.mem_table.insert_temp_edge(source, code, target);
@@ -488,7 +484,7 @@ mod tests {
             source_v: &Vec<String>,
             code: &str,
             target: &str,
-        ) -> io::Result<()> {
+        ) -> Result<()> {
             for source in source_v {
                 if is_temp(source, code, target) {
                     self.mem_table.insert_temp_edge(source, code, target);
@@ -504,7 +500,7 @@ mod tests {
             source: &str,
             code: &str,
             target_v: &Vec<String>,
-        ) -> io::Result<()> {
+        ) -> Result<()> {
             self.mem_table.delete_edge_with_source_code(source, code);
             for target in target_v {
                 if is_temp(source, code, target) {
@@ -521,7 +517,7 @@ mod tests {
             source_v: &Vec<String>,
             code: &str,
             target: &str,
-        ) -> io::Result<()> {
+        ) -> Result<()> {
             self.mem_table.delete_edge_with_code_target(code, target);
             for source in source_v {
                 if is_temp(source, code, target) {

@@ -1,15 +1,19 @@
 //! Server that provides services.
 
-use std::{io, sync::Arc};
+use std::sync::Arc;
 
 use axum::{routing, Router};
 use tokio::sync::Mutex;
 
-use crate::{app, mem_table};
+use crate::{
+    app,
+    err::{Error, ErrorKind, Result},
+    mem_table,
+};
 
 mod service;
 
-async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> io::Result<()> {
+async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> Result<()> {
     // build our application with a route
     let app = Router::new()
         .route(
@@ -23,15 +27,19 @@ async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> io::Result<()> 
         .with_state(Arc::new(app::AppState {
             pool: sqlx::Pool::connect(db_url)
                 .await
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?,
+                .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?,
             mem_table: Mutex::new(mem_table::MemTable::new()),
         }));
 
     // run our app with hyper, listening globally on port 3000
     let address = format!("{}:{}", ip, port);
     log::info!("serving at {address}/{}", name);
-    let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, app).await
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+    axum::serve(listener, app)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
 }
 
 // Public
@@ -52,7 +60,7 @@ impl Server {
         }
     }
 
-    pub async fn run(self) -> io::Result<()> {
+    pub async fn run(self) -> Result<()> {
         serve(&self.ip, self.port, &self.name, &self.db_url).await
     }
 }

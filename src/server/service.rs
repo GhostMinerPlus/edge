@@ -1,23 +1,20 @@
-mod edge_service;
-
-use std::{
-    io::{Error, ErrorKind},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use axum::{extract::State, http::StatusCode, Json};
 use serde::Deserialize;
 use sqlx::Acquire;
 
-use crate::app::AppState;
+use crate::{app::AppState, err::{Error, ErrorKind}};
 
+mod edge_service;
+
+// Public
 #[derive(Deserialize)]
 pub struct Require {
     target: String,
     constraint: String,
 }
 
-// Public
 pub async fn http_execute(
     State(state): State<Arc<AppState>>,
     script_vn: String,
@@ -27,25 +24,25 @@ pub async fn http_execute(
             .pool
             .begin()
             .await
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| Error::new(ErrorKind::BadConnection, e.to_string()))?;
         let conn = tr
             .acquire()
             .await
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| Error::new(ErrorKind::BadConnection, e.to_string()))?;
         let mut mem_table = state.mem_table.lock().await;
         // Execute
-        let r = match edge_service::execute(conn, &mut mem_table, &json::parse(&script_vn).unwrap()).await {
+        let r = match edge_service::execute(conn, &mut mem_table, &json::parse(&script_vn).unwrap())
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 let _ = tr.rollback().await;
-                log::error!("{e}");
                 return Err(e);
             }
         };
         // commit
         if let Err(e) = tr.commit().await {
-            log::error!("{e}");
-            return Err(Error::new(ErrorKind::Other, e.to_string()));
+            return Err(Error::new(ErrorKind::BadConnection, e.to_string()));
         }
         // json
         Ok(r)
@@ -53,7 +50,10 @@ pub async fn http_execute(
     .await
     {
         Ok(r) => (StatusCode::OK, json::stringify(r)),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => {
+            log::error!("{e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        }
     }
 }
 
@@ -66,25 +66,26 @@ pub async fn http_require(
             .pool
             .begin()
             .await
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| Error::new(ErrorKind::BadConnection, e.to_string()))?;
         let conn = tr
             .acquire()
             .await
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| Error::new(ErrorKind::BadConnection, e.to_string()))?;
         let mut mem_table = state.mem_table.lock().await;
         // Execute
-        let r = match edge_service::require(conn, &mut mem_table, &require.target, &require.constraint).await {
-            Ok(r) => r,
-            Err(e) => {
-                let _ = tr.rollback().await;
-                log::error!("{e}");
-                return Err(e);
-            }
-        };
+        let r =
+            match edge_service::require(conn, &mut mem_table, &require.target, &require.constraint)
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tr.rollback().await;
+                    return Err(e);
+                }
+            };
         // commit
         if let Err(e) = tr.commit().await {
-            log::error!("{e}");
-            return Err(Error::new(ErrorKind::Other, e.to_string()));
+            return Err(Error::new(ErrorKind::BadConnection, e.to_string()));
         }
         // json
         Ok(r)
@@ -92,6 +93,9 @@ pub async fn http_require(
     .await
     {
         Ok(r) => (StatusCode::OK, json::stringify(r)),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => {
+            log::error!("{e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        }
     }
 }

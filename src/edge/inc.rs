@@ -1,15 +1,15 @@
-use std::{cmp::min, collections::HashSet, io};
+use std::{cmp::min, collections::HashSet};
 
 use rand::random;
 
-use crate::data::AsDataManager;
+use crate::{data::AsDataManager, err::{Error, ErrorKind, Result}};
 
 // Public
 pub async fn append(
     _: &mut impl AsDataManager,
     mut input_item_v: Vec<String>,
     mut input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     input_item_v.append(&mut input1_item_v);
     Ok(input_item_v)
 }
@@ -18,7 +18,7 @@ pub async fn distinct(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     _: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let mut set: HashSet<String> = HashSet::new();
     Ok(input_item_v
         .into_iter()
@@ -30,7 +30,7 @@ pub async fn left(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let mut set = HashSet::new();
     set.extend(input1_item_v);
 
@@ -44,7 +44,7 @@ pub async fn inner(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let mut set = HashSet::new();
     set.extend(input1_item_v);
 
@@ -58,7 +58,7 @@ pub async fn set(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     _: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     Ok(input_item_v)
 }
 
@@ -66,7 +66,7 @@ pub async fn sort(
     dm: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     _: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let mut temp_item_v = Vec::with_capacity(input_item_v.len());
     for input_item in &input_item_v {
         let no = dm.get_target(input_item, "$no").await?;
@@ -81,7 +81,7 @@ pub async fn add(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -103,7 +103,7 @@ pub async fn minus(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -125,7 +125,7 @@ pub async fn mul(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -147,7 +147,7 @@ pub async fn div(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -169,7 +169,7 @@ pub async fn rest(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -191,7 +191,7 @@ pub async fn equal(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -206,7 +206,7 @@ pub async fn greater(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -229,7 +229,7 @@ pub async fn smaller(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let sz = min(input_item_v.len(), input1_item_v.len());
     let mut output_item_v = Vec::with_capacity(sz);
     for i in 0..sz {
@@ -252,13 +252,13 @@ pub async fn new(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     input1_item_v: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     if min(input_item_v.len(), input1_item_v.len()) != 1 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "need 1 but not"));
+        return Err(Error::new(ErrorKind::Other, "need 1 but not".to_string()));
     }
     let sz = input_item_v[0]
         .parse::<i64>()
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     let mut output_item_v = Vec::with_capacity(sz as usize);
     for _ in 0..sz {
         output_item_v.push(input1_item_v[0].clone());
@@ -270,13 +270,13 @@ pub async fn line(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     _: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     if input_item_v.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "need 1 but not"));
+        return Err(Error::new(ErrorKind::Other, "need 1 but not".to_string()));
     }
     let sz = input_item_v[0]
         .parse::<i64>()
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     let mut output_item_v = Vec::with_capacity(sz as usize);
     for i in 0..sz {
         output_item_v.push(i.to_string());
@@ -288,13 +288,13 @@ pub async fn rand(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     _: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     if input_item_v.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "need 1 but not"));
+        return Err(Error::new(ErrorKind::Other, "need 1 but not".to_string()));
     }
     let sz = input_item_v[0]
         .parse::<i64>()
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     let mut output_item_v = Vec::with_capacity(sz as usize);
     for _ in 0..sz {
         let r = random::<f64>();
@@ -307,7 +307,7 @@ pub async fn count(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     _: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let mut output_item_v = Vec::new();
     output_item_v.push(input_item_v.len().to_string());
     Ok(input_item_v)
@@ -317,7 +317,7 @@ pub async fn sum(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
     _: Vec<String>,
-) -> io::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     let mut output_item_v = Vec::new();
     let mut r = 0.0;
     for input_item in &input_item_v {
