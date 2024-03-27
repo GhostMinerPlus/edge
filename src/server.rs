@@ -6,7 +6,6 @@ use axum::{routing, Router};
 use tokio::sync::Mutex;
 
 use crate::{
-    app,
     data::mem_table,
     err::{Error, ErrorKind, Result},
 };
@@ -25,7 +24,7 @@ async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> Result<()> {
             &format!("/{}/require", name),
             routing::post(interface::http_require),
         )
-        .with_state(Arc::new(app::AppState {
+        .with_state(Arc::new(context::Context {
             pool: sqlx::Pool::connect(db_url)
                 .await
                 .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?,
@@ -44,6 +43,8 @@ async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> Result<()> {
 }
 
 // Public
+pub mod context;
+
 pub struct Server {
     ip: String,
     name: String,

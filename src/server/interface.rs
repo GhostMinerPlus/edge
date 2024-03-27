@@ -5,8 +5,8 @@ use serde::Deserialize;
 use sqlx::Acquire;
 
 use crate::{
-    app::AppState,
     err::{Error, ErrorKind},
+    server::context::Context,
 };
 
 use super::edge_service;
@@ -19,7 +19,7 @@ pub struct Require {
 }
 
 pub async fn http_execute(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<Context>>,
     script_vn: String,
 ) -> (StatusCode, String) {
     match (|| async {
@@ -61,7 +61,7 @@ pub async fn http_execute(
 }
 
 pub async fn http_require(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<Context>>,
     Json(require): Json<Require>,
 ) -> (StatusCode, String) {
     match (|| async {

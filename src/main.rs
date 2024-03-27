@@ -2,7 +2,6 @@ use earth::AsConfig;
 use err::ErrorKind;
 use serde::{Deserialize, Serialize};
 
-mod app;
 mod data;
 mod engine;
 mod err;
