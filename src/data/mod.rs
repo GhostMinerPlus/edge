@@ -186,7 +186,6 @@ impl<'a> AsDataManager for DataManager<'a> {
             Ok(target)
         } else {
             let target = dao::get_target(&mut self.conn, source, code).await?;
-            self.mem_table.append_exists_edge(source, code, &target);
             Ok(target)
         }
     }
@@ -196,7 +195,6 @@ impl<'a> AsDataManager for DataManager<'a> {
             Ok(source)
         } else {
             let source = dao::get_source(&mut self.conn, code, target).await?;
-            self.mem_table.append_exists_edge(&source, code, target);
             Ok(source)
         }
     }
