@@ -16,6 +16,10 @@ async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> io::Result<()> 
             &format!("/{}/execute", name),
             routing::post(service::http_execute),
         )
+        .route(
+            &format!("/{}/require", name),
+            routing::post(service::http_require),
+        )
         .with_state(Arc::new(app::AppState {
             pool: sqlx::Pool::connect(db_url)
                 .await
