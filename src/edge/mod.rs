@@ -53,13 +53,20 @@ async fn unwrap_value(root: &str, value: &str) -> io::Result<String> {
     }
 }
 
-async fn asign(dm: &mut impl AsDataManager, output: &str, item_v: Vec<String>) -> io::Result<()> {
+async fn asign(
+    dm: &mut impl AsDataManager,
+    output: &str,
+    operator: &str,
+    item_v: Vec<String>,
+) -> io::Result<()> {
     let mut output_path = Path::from_str(output);
     let last_step = output_path.step_v.pop().unwrap();
     let root_v = get_all_by_path(dm, output_path).await?;
     if last_step.arrow == "->" {
         for source in &root_v {
-            dm.clear(source, &last_step.code).await?;
+            if operator == "=" {
+                dm.clear(source, &last_step.code).await?;
+            }
             for target in &item_v {
                 dm.insert_edge_v(&vec![Edge {
                     source: source.clone(),
@@ -71,7 +78,9 @@ async fn asign(dm: &mut impl AsDataManager, output: &str, item_v: Vec<String>) -
         }
     } else {
         for target in &root_v {
-            dm.rclear(&last_step.code, target).await?;
+            if operator == "=" {
+                dm.rclear(&last_step.code, target).await?;
+            }
             for source in &item_v {
                 dm.insert_edge_v(&vec![Edge {
                     source: source.clone(),
@@ -91,6 +100,7 @@ async fn dump_inc_v(dm: &mut impl AsDataManager, function: &str) -> io::Result<V
     for inc_h in &inc_h_v {
         inc_v.push(Inc {
             output: dm.get_target(inc_h, "output").await?,
+            operator: dm.get_target(inc_h, "operator").await?,
             function: dm.get_target(inc_h, "function").await?,
             input: dm.get_target(inc_h, "input").await?,
             input1: dm.get_target(inc_h, "input1").await?,
@@ -134,8 +144,8 @@ async fn invoke_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::R
         _ => {
             let inc_v = dump_inc_v(dm, &inc.function).await?;
             let new_root = format!("${}", uuid::Uuid::new_v4().to_string());
-            asign(dm, &format!("{new_root}->$input"), input_item_v).await?;
-            asign(dm, &format!("{new_root}->$input1"), input1_item_v).await?;
+            asign(dm, &format!("{new_root}->$input"), "=", input_item_v).await?;
+            asign(dm, &format!("{new_root}->$input1"), "=", input1_item_v).await?;
             log::debug!("inc_v.len(): {}", inc_v.len());
             for inc in &inc_v {
                 let inc = unwrap_inc(dm, &new_root, inc).await?;
@@ -144,18 +154,23 @@ async fn invoke_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::R
             get_all_by_path(dm, Path::from_str(&format!("{new_root}->$output"))).await?
         }
     };
-    asign(dm, &inc.output, rs).await
+    asign(dm, &inc.output, &inc.operator, rs).await
+}
+
+async fn get_one(dm: &mut impl AsDataManager, root: &str, id: &str) -> io::Result<String> {
+    let path = unwrap_value(root, id).await?;
+    let id_v = get_all_by_path(dm, Path::from_str(&path)).await?;
+    if id_v.len() != 1 {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "need 1 but not"));
+    }
+    Ok(id_v[0].clone())
 }
 
 async fn unwrap_inc(dm: &mut impl AsDataManager, root: &str, inc: &Inc) -> io::Result<Inc> {
-    let path = unwrap_value(root, &inc.function).await?;
-    let function_v = get_all_by_path(dm, Path::from_str(&path)).await?;
-    if function_v.len() != 1 {
-        return Err(io::Error::new(io::ErrorKind::NotFound, "unknown function"));
-    }
     let inc = Inc {
         output: unwrap_value(root, &inc.output).await?,
-        function: function_v[0].clone(),
+        operator: get_one(dm, root, &inc.operator).await?,
+        function: get_one(dm, root, &inc.function).await?,
         input: unwrap_value(root, &inc.input).await?,
         input1: unwrap_value(root, &inc.input1).await?,
     };
@@ -257,19 +272,22 @@ fn parse_script(script: &str) -> io::Result<Vec<Inc>> {
         if line.is_empty() {
             continue;
         }
-        // <output> <function> <input>
+        // <output> <operator> <function> <input>
         let word_v: Vec<&str> = line.split(" ").collect();
-        match word_v.len() {
-            4 => {
-                inc_v.push(Inc {
-                    output: word_v[0].trim().to_string(),
-                    function: word_v[1].trim().to_string(),
-                    input: word_v[2].trim().to_string(),
-                    input1: word_v[3].trim().to_string(),
-                });
-            }
-            _ => todo!(),
+        if word_v.len() != 5 {
+            log::error!("while parsing script: word_v.len() != 5");
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "while parsing script",
+            ));
         }
+        inc_v.push(Inc {
+            output: word_v[0].trim().to_string(),
+            operator: word_v[1].trim().to_string(),
+            function: word_v[2].trim().to_string(),
+            input: word_v[3].trim().to_string(),
+            input1: word_v[4].trim().to_string(),
+        });
     }
     Ok(inc_v)
 }
@@ -330,6 +348,7 @@ impl Path {
 #[derive(Clone, Deserialize, Debug)]
 pub struct Inc {
     pub output: String,
+    pub operator: String,
     pub function: String,
     pub input: String,
     pub input1: String,
@@ -461,11 +480,11 @@ mod tests {
         let task = async {
             let dm = FakeDataManager::new();
             let root = format!(
-                "$->$left new 100 100
-$->$right new 100 100
-$->$output + $->$left $->$right"
+                "$->$left = new 100 100
+$->$right = new 100 100
+$->$output = + $->$left $->$right"
             );
-            let then = format!("$->$output rand $->$input _");
+            let then = format!("$->$output = rand $->$input _");
             let then_tree = json::object! {};
             let mut root_tree = json::object! {};
             let _ = root_tree.insert(&then, then_tree);

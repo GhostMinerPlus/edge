@@ -17,12 +17,13 @@ pub async fn append(
 pub async fn distinct(
     _: &mut impl AsDataManager,
     input_item_v: Vec<String>,
-    input1_item_v: Vec<String>,
+    _: Vec<String>,
 ) -> io::Result<Vec<String>> {
-    let mut set = HashSet::new();
-    set.extend(input_item_v);
-    set.extend(input1_item_v);
-    Ok(set.into_iter().collect())
+    let mut set: HashSet<String> = HashSet::new();
+    Ok(input_item_v
+        .into_iter()
+        .filter(|item| set.insert(item.clone()))
+        .collect())
 }
 
 pub async fn left(
@@ -31,11 +32,12 @@ pub async fn left(
     input1_item_v: Vec<String>,
 ) -> io::Result<Vec<String>> {
     let mut set = HashSet::new();
-    set.extend(input_item_v);
-    for item in &input1_item_v {
-        set.remove(item);
-    }
-    Ok(set.into_iter().collect())
+    set.extend(input1_item_v);
+
+    Ok(input_item_v
+        .into_iter()
+        .filter(|item| !set.contains(item))
+        .collect())
 }
 
 pub async fn inner(
@@ -44,14 +46,12 @@ pub async fn inner(
     input1_item_v: Vec<String>,
 ) -> io::Result<Vec<String>> {
     let mut set = HashSet::new();
-    set.extend(input_item_v);
-    let mut set = HashSet::new();
-    for item in &input1_item_v {
-        if !set.contains(item) {
-            set.remove(item);
-        }
-    }
-    Ok(set.into_iter().collect())
+    set.extend(input1_item_v);
+
+    Ok(input_item_v
+        .into_iter()
+        .filter(|item| set.contains(item))
+        .collect())
 }
 
 pub async fn set(
