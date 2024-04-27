@@ -1,12 +1,9 @@
 use std::io;
 
+use edge_lib::{mem_table::MemTable, AsEdgeEngine, EdgeEngine};
 use sqlx::MySqlConnection;
 
-use crate::{
-    data::DataManager,
-    edge::{AsEdgeEngine, EdgeEngine},
-    mem_table::MemTable,
-};
+use crate::data::DataManager;
 
 // Public
 pub async fn execute(

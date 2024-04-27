@@ -3,9 +3,10 @@
 use std::{io, sync::Arc};
 
 use axum::{routing, Router};
+use edge_lib::mem_table::MemTable;
 use tokio::sync::Mutex;
 
-use crate::{app, mem_table};
+use crate::app;
 
 mod service;
 
@@ -20,7 +21,7 @@ async fn serve(ip: &str, port: u16, name: &str, db_url: &str) -> io::Result<()> 
             pool: sqlx::Pool::connect(db_url)
                 .await
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?,
-            mem_table: Mutex::new(mem_table::MemTable::new()),
+            mem_table: Mutex::new(MemTable::new()),
         }));
 
     // run our app with hyper, listening globally on port 3000

@@ -3,9 +3,8 @@ use std::{
     io::{self, Error, ErrorKind},
 };
 
+use edge_lib::mem_table::Edge;
 use sqlx::{MySqlConnection, Row};
-
-use crate::mem_table::Edge;
 
 // Public
 pub async fn delete_edge_with_source_code(

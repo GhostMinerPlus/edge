@@ -1,8 +1,7 @@
 use std::io;
 
+use edge_lib::{data::AsDataManager, mem_table::MemTable};
 use sqlx::MySqlConnection;
-
-use crate::mem_table::MemTable;
 
 mod dao;
 
@@ -31,66 +30,6 @@ async fn rclear(dm: &mut DataManager<'_>, code: &str, target: &str) -> io::Resul
 }
 
 // Public
-pub trait AsDataManager: Send {
-    fn append_target_v(
-        &mut self,
-        source: &str,
-        code: &str,
-        target_v: &Vec<String>,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
-
-    fn append_source_v(
-        &mut self,
-        source_v: &Vec<String>,
-        code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
-
-    fn set_target_v(
-        &mut self,
-        source: &str,
-        code: &str,
-        target_v: &Vec<String>,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
-
-    fn set_source_v(
-        &mut self,
-        source_v: &Vec<String>,
-        code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<()>> + Send;
-
-    /// Get a target from `source->code`
-    fn get_target(
-        &mut self,
-        source: &str,
-        code: &str,
-    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
-
-    /// Get a source from `target<-code`
-    fn get_source(
-        &mut self,
-        code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<String>> + Send;
-
-    /// Get all targets from `source->code`
-    fn get_target_v(
-        &mut self,
-        source: &str,
-        code: &str,
-    ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
-
-    /// Get all targets from `source->code`
-    fn get_source_v(
-        &mut self,
-        code: &str,
-        target: &str,
-    ) -> impl std::future::Future<Output = io::Result<Vec<String>>> + Send;
-
-    async fn commit(&mut self) -> io::Result<()>;
-}
-
 pub struct DataManager<'a> {
     conn: &'a mut MySqlConnection,
     mem_table: &'a mut MemTable,
@@ -112,7 +51,7 @@ impl<'a> AsDataManager for DataManager<'a> {
         if !is_temp(source, code, "") && self.mem_table.get_target(source, code).is_none() {
             let r = dao::get_target_v(&mut self.conn, source, code).await?;
             for target in &r {
-                self.mem_table.append_exists_edge(source, code, target);
+                self.mem_table.insert_temp_edge(source, code, target);
             }
         }
         for target in target_v {
@@ -134,7 +73,7 @@ impl<'a> AsDataManager for DataManager<'a> {
         if !is_temp("", code, target) && self.mem_table.get_source(code, target).is_none() {
             let r = dao::get_source_v(&mut self.conn, code, target).await?;
             for source in &r {
-                self.mem_table.append_exists_edge(source, code, target);
+                self.mem_table.insert_temp_edge(source, code, target);
             }
         }
         for source in source_v {
@@ -204,7 +143,7 @@ impl<'a> AsDataManager for DataManager<'a> {
         if r.is_empty() {
             let r = dao::get_target_v(&mut self.conn, source, code).await?;
             for target in &r {
-                self.mem_table.append_exists_edge(source, code, target);
+                self.mem_table.insert_temp_edge(source, code, target);
             }
             Ok(r)
         } else {
@@ -217,7 +156,7 @@ impl<'a> AsDataManager for DataManager<'a> {
         if r.is_empty() {
             let r = dao::get_source_v(&mut self.conn, code, target).await?;
             for source in &r {
-                self.mem_table.append_exists_edge(source, code, target);
+                self.mem_table.insert_temp_edge(source, code, target);
             }
             Ok(r)
         } else {
