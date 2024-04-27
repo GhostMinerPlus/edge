@@ -413,14 +413,12 @@ dependencies = [
 name = "edge"
 version = "0.1.0"
 dependencies = [
- "async-recursion",
  "axum",
  "earth",
  "edge_lib",
  "env_logger",
  "json",
  "log",
- "rand",
  "reqwest",
  "rust_decimal",
  "serde",
@@ -428,7 +426,6 @@ dependencies = [
  "sqlx",
  "tokio",
  "toml 0.8.12",
- "uuid",
 ]
 
 [[package]]
