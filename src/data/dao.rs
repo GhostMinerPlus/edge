@@ -4,39 +4,39 @@ use std::{
 };
 
 use edge_lib::mem_table::Edge;
-use sqlx::{MySqlConnection, Row};
+use sqlx::{MySql, Pool, Row};
 
 // Public
 pub async fn delete_edge_with_source_code(
-    conn: &mut MySqlConnection,
+    pool: Pool<MySql>,
     source: &str,
     code: &str,
 ) -> io::Result<()> {
     sqlx::query("delete from edge_t where source = ? and code = ?")
         .bind(source)
         .bind(code)
-        .execute(conn)
+        .execute(&pool)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     Ok(())
 }
 
 pub async fn delete_edge_with_code_target(
-    conn: &mut MySqlConnection,
+    pool: Pool<MySql>,
     code: &str,
     target: &str,
 ) -> io::Result<()> {
     sqlx::query("delete from edge_t where code = ? and target = ?")
         .bind(code)
         .bind(target)
-        .execute(conn)
+        .execute(&pool)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     Ok(())
 }
 
 pub async fn insert_edge_mp(
-    conn: &mut MySqlConnection,
+    pool: Pool<MySql>,
     edge_mp: &BTreeMap<u64, Edge>,
 ) -> io::Result<()> {
     if edge_mp.is_empty() {
@@ -64,14 +64,14 @@ pub async fn insert_edge_mp(
     }
 
     statement
-        .execute(conn)
+        .execute(&pool)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
     Ok(())
 }
 
 pub async fn get_target(
-    conn: &mut MySqlConnection,
+    pool: Pool<MySql>,
     source: &str,
     code: &str,
 ) -> io::Result<String> {
@@ -79,7 +79,7 @@ pub async fn get_target(
         sqlx::query("select target from edge_t where source=? and code=?  order by id limit 1")
             .bind(source)
             .bind(code)
-            .fetch_one(conn)
+            .fetch_one(&pool)
             .await
             .map_err(|e| match e {
                 sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),
@@ -89,14 +89,14 @@ pub async fn get_target(
 }
 
 pub async fn get_target_v(
-    conn: &mut MySqlConnection,
+    pool: Pool<MySql>,
     source: &str,
     code: &str,
 ) -> io::Result<Vec<String>> {
     let rs = sqlx::query("select target from edge_t where source=? and code=? order by id")
         .bind(source)
         .bind(code)
-        .fetch_all(conn)
+        .fetch_all(&pool)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     let mut arr = Vec::new();
@@ -107,14 +107,14 @@ pub async fn get_target_v(
 }
 
 pub async fn get_source_v(
-    conn: &mut MySqlConnection,
+    pool: Pool<MySql>,
     code: &str,
     target: &str,
 ) -> io::Result<Vec<String>> {
     let rs = sqlx::query("select source from edge_t where code=? and target=? order by id")
         .bind(code)
         .bind(target)
-        .fetch_all(conn)
+        .fetch_all(&pool)
         .await
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     let mut arr = Vec::new();
@@ -125,7 +125,7 @@ pub async fn get_source_v(
 }
 
 pub async fn get_source(
-    conn: &mut MySqlConnection,
+    pool: Pool<MySql>,
     code: &str,
     target: &str,
 ) -> io::Result<String> {
@@ -133,7 +133,7 @@ pub async fn get_source(
         sqlx::query("select source from edge_t where code=? and target=?  order by id limit 1")
             .bind(code)
             .bind(target)
-            .fetch_one(conn)
+            .fetch_one(&pool)
             .await
             .map_err(|e| match e {
                 sqlx::Error::RowNotFound => Error::new(ErrorKind::NotFound, e),

@@ -1,11 +1,10 @@
-use std::io;
+use std::{io, time::Duration};
 
 use earth::AsConfig;
+use edge::{data::DataManager, server};
+use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine};
 use serde::{Deserialize, Serialize};
-
-mod app;
-mod data;
-mod server;
+use tokio::time;
 
 #[derive(Debug, Deserialize, Serialize, Clone, AsConfig)]
 struct Config {
@@ -52,5 +51,28 @@ fn main() -> io::Result<()> {
         .enable_all()
         .worker_threads(config.thread_num as usize)
         .build()?
-        .block_on(server::Server::new(config.ip, config.port, config.name, config.db_url).run())
+        .block_on(async {
+            let pool = sqlx::Pool::connect(&config.db_url)
+                .await
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+            let dm = DataManager::new(pool);
+            let mut edge_engine = EdgeEngine::new(dm.divide());
+            // config.ip, config.port, config.name
+            let script = [
+                format!("root->name = = {} _", config.name),
+                format!("root->ip = = {} _", config.ip),
+                format!("root->port = = {} _", config.port),
+            ]
+            .join("\\n");
+            edge_engine
+                .execute(&json::parse(&format!("{{\"{script}\": null}}")).unwrap())
+                .await?;
+            edge_engine.commit().await?;
+
+            tokio::spawn(server::HttpServer::new(dm.divide()).run());
+            loop {
+                log::info!("alive");
+                time::sleep(Duration::from_secs(10)).await;
+            }
+        })
 }
