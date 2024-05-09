@@ -3,7 +3,7 @@
 use std::{io, sync::Arc};
 
 use axum::{extract::State, http::StatusCode, routing, Router};
-use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine};
+use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, ScriptTree};
 
 // Public
 pub struct HttpServer {
@@ -16,7 +16,7 @@ impl HttpServer {
         log::debug!("executing {script_vn}");
         let mut edge_engine = EdgeEngine::new(dm);
         let rs = edge_engine
-            .execute(&json::parse(&script_vn).unwrap())
+            .execute(&serde_json::from_str(&script_vn).unwrap())
             .await?;
         edge_engine.commit().await?;
         log::info!("commited");
@@ -43,15 +43,17 @@ impl HttpServer {
     pub async fn run(self) -> io::Result<()> {
         let mut edge_engine = EdgeEngine::new(self.dm.divide());
 
-        let script = [
-            "$->$output = = root->name _",
-            "$->$output += = root->ip _",
-            "$->$output += = root->port _",
-            "info",
-        ]
-        .join("\\n");
         let rs = edge_engine
-            .execute(&json::parse(&format!("{{\"{script}\": null}}")).unwrap())
+            .execute(&ScriptTree {
+                script: [
+                    "$->$output = = root->name _",
+                    "$->$output += = root->ip _",
+                    "$->$output += = root->port _",
+                ]
+                .join("\n"),
+                name: "info".to_string(),
+                next_v: vec![],
+            })
             .await?;
         log::debug!("{rs}");
         let name = rs["info"][0].as_str().unwrap();

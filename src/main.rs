@@ -2,7 +2,7 @@ use std::{io, time::Duration};
 
 use earth::AsConfig;
 use edge::{data::DataManager, server};
-use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine};
+use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, ScriptTree};
 use serde::{Deserialize, Serialize};
 use tokio::time;
 
@@ -58,14 +58,17 @@ fn main() -> io::Result<()> {
             let dm = DataManager::new(pool);
             let mut edge_engine = EdgeEngine::new(dm.divide());
             // config.ip, config.port, config.name
-            let script = [
-                format!("root->name = = {} _", config.name),
-                format!("root->ip = = {} _", config.ip),
-                format!("root->port = = {} _", config.port),
-            ]
-            .join("\\n");
             edge_engine
-                .execute(&json::parse(&format!("{{\"{script}\": null}}")).unwrap())
+                .execute(&ScriptTree {
+                    script: [
+                        format!("root->name = = {} _", config.name),
+                        format!("root->ip = = {} _", config.ip),
+                        format!("root->port = = {} _", config.port),
+                    ]
+                    .join("\n"),
+                    name: "".to_string(),
+                    next_v: vec![],
+                })
                 .await?;
             edge_engine.commit().await?;
 
