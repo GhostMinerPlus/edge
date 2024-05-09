@@ -12,6 +12,7 @@ fn is_temp(code: &str) -> bool {
 
 struct CacheTable {
     cache: MemTable,
+    cache_set: HashSet<String>,
     delete_list_by_source: HashSet<(String, String)>,
     delete_list_by_target: HashSet<(String, String)>,
 }
@@ -22,7 +23,20 @@ impl CacheTable {
             cache: MemTable::new(),
             delete_list_by_source: Default::default(),
             delete_list_by_target: Default::default(),
+            cache_set: HashSet::new(),
         }
+    }
+
+    fn is_cached(&self, path: &str) -> bool {
+        self.cache_set.contains(path)
+    }
+
+    fn cache(&mut self, path: String) {
+        self.cache_set.insert(path);
+    }
+
+    fn clear_cache(&mut self) {
+        self.cache_set.clear();
     }
 }
 
@@ -59,10 +73,10 @@ impl AsDataManager for DataManager {
         let (source, code) = (source.to_string(), code.to_string());
         Box::pin(async move {
             let cache_table = dm.cache_table.lock().await;
-            if let Some(target) = cache_table.cache.get_target(&source, &code) {
-                return Ok(target);
+            if cache_table.is_cached(&format!("{source}->{code}")) {
+                return Ok(cache_table.cache.get_target(&source, &code).unwrap_or_default());
             }
-            Ok(dao::get_target(dm.pool, &source, &code).await?)
+            dao::get_target(dm.pool, &source, &code).await
         })
     }
 
@@ -75,10 +89,33 @@ impl AsDataManager for DataManager {
         let (code, target) = (code.to_string(), target.to_string());
         Box::pin(async move {
             let cache_table = dm.cache_table.lock().await;
-            if let Some(source) = cache_table.cache.get_source(&code, &target) {
-                return Ok(source);
+            if cache_table.is_cached(&format!("{target}<-{code}")) {
+                return Ok(cache_table.cache.get_source(&code, &target).unwrap_or_default());
             }
-            Ok(dao::get_source(dm.pool, &code, &target).await?)
+            dao::get_source(dm.pool, &code, &target).await
+        })
+    }
+
+    fn get_source_v(
+        &mut self,
+        code: &str,
+        target: &str,
+    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
+        let dm = self.clone();
+        let (code, target) = (code.to_string(), target.to_string());
+        Box::pin(async move {
+            let mut cache_table = dm.cache_table.lock().await;
+            if cache_table.is_cached(&format!("{target}<-{code}")) {
+                Ok(cache_table.cache.get_source_v_unchecked(&code, &target))
+            } else {
+                let rs = dao::get_source_v(dm.pool, &code, &target).await?;
+                cache_table.cache.delete_edge_with_code_target(&code, &target);
+                for source in &rs {
+                    cache_table.cache.insert_temp_edge(source, &code, &target);
+                }
+                cache_table.cache(format!("{target}<-{code}"));
+                Ok(rs)
+            }
         })
     }
 
@@ -91,15 +128,16 @@ impl AsDataManager for DataManager {
         let (source, code) = (source.to_string(), code.to_string());
         Box::pin(async move {
             let mut cache_table = dm.cache_table.lock().await;
-            let rs = cache_table.cache.get_target_v_unchecked(&source, &code);
-            if !rs.is_empty() {
-                return Ok(rs);
+            if cache_table.is_cached(&format!("{source}->{code}")) {
+                return Ok(cache_table.cache.get_target_v_unchecked(&source, &code));
             }
 
             let rs = dao::get_target_v(dm.pool, &source, &code).await?;
+            cache_table.cache.delete_edge_with_source_code(&source, &code);
             for target in &rs {
                 cache_table.cache.insert_temp_edge(&source, &code, target);
             }
+            cache_table.cache(format!("{source}->{code}"));
             Ok(rs)
         })
     }
@@ -118,18 +156,21 @@ impl AsDataManager for DataManager {
                 for target in &target_v {
                     cache_table.cache.insert_temp_edge(&source, &code, target);
                 }
+                cache_table.is_cached(&format!("{source}->{code}"));
                 return Ok(());
             }
 
-            if cache_table.cache.get_target(&source, &code).is_none() {
-                let r = dao::get_target_v(dm.pool, &source, &code).await?;
-                for target in &r {
+            if !cache_table.is_cached(&format!("{source}->{code}")) {
+                let rs = dao::get_target_v(dm.pool, &source, &code).await?;
+                cache_table.cache.delete_edge_with_source_code(&source, &code);
+                for target in &rs {
                     cache_table.cache.insert_temp_edge(&source, &code, target);
                 }
             }
             for target in &target_v {
                 cache_table.cache.insert_edge(&source, &code, target);
             }
+            cache_table.cache(format!("{source}->{code}"));
             Ok(())
         })
     }
@@ -148,11 +189,13 @@ impl AsDataManager for DataManager {
                 for source in &source_v {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
+                cache_table.cache(format!("{target}<-{code}"));
                 return Ok(());
             }
 
-            if cache_table.cache.get_source(&code, &target).is_none() {
+            if !cache_table.is_cached(&format!("{target}<-{code}")) {
                 let rs = dao::get_source_v(dm.pool, &code, &target).await?;
+                cache_table.cache.delete_edge_with_code_target(&code, &target);
                 for source in &rs {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
@@ -160,6 +203,7 @@ impl AsDataManager for DataManager {
             for source in &source_v {
                 cache_table.cache.insert_edge(source, &code, &target);
             }
+            cache_table.cache(format!("{target}<-{code}"));
             Ok(())
         })
     }
@@ -189,6 +233,7 @@ impl AsDataManager for DataManager {
                     cache_table.cache.insert_edge(&source, &code, target);
                 }
             }
+            cache_table.cache(format!("{source}->{code}"));
             Ok(())
         })
     }
@@ -218,29 +263,8 @@ impl AsDataManager for DataManager {
                     cache_table.cache.insert_edge(source, &code, &target);
                 }
             }
+            cache_table.cache(format!("{target}<-{code}"));
             Ok(())
-        })
-    }
-
-    fn get_source_v(
-        &mut self,
-        code: &str,
-        target: &str,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
-        let dm = self.clone();
-        let (code, target) = (code.to_string(), target.to_string());
-        Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            let r = cache_table.cache.get_source_v_unchecked(&code, &target);
-            if r.is_empty() {
-                let r = dao::get_source_v(dm.pool, &code, &target).await?;
-                for source in &r {
-                    cache_table.cache.insert_temp_edge(source, &code, &target);
-                }
-                Ok(r)
-            } else {
-                Ok(r)
-            }
         })
     }
 
@@ -248,6 +272,7 @@ impl AsDataManager for DataManager {
         let dm = self.clone();
         Box::pin(async move {
             let mut cache_table = dm.cache_table.lock().await;
+            cache_table.clear_cache();
             for (source, code) in mem::take(&mut cache_table.delete_list_by_source) {
                 dao::delete_edge_with_source_code(dm.pool.clone(), &source, &code).await?;
             }
