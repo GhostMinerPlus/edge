@@ -1,4 +1,4 @@
-use std::{collections::HashSet, io, mem, pin::Pin, sync::Arc};
+use std::{collections::HashSet, io, pin::Pin, sync::Arc};
 
 use edge_lib::{data::AsDataManager, mem_table::MemTable};
 use sqlx::{MySql, Pool};
@@ -13,16 +13,12 @@ fn is_temp(code: &str) -> bool {
 struct CacheTable {
     cache: MemTable,
     cache_set: HashSet<String>,
-    delete_list_by_source: HashSet<(String, String)>,
-    delete_list_by_target: HashSet<(String, String)>,
 }
 
 impl CacheTable {
     fn new() -> Self {
         Self {
             cache: MemTable::new(),
-            delete_list_by_source: Default::default(),
-            delete_list_by_target: Default::default(),
             cache_set: HashSet::new(),
         }
     }
@@ -74,7 +70,10 @@ impl AsDataManager for DataManager {
         Box::pin(async move {
             let cache_table = dm.cache_table.lock().await;
             if cache_table.is_cached(&format!("{source}->{code}")) {
-                return Ok(cache_table.cache.get_target(&source, &code).unwrap_or_default());
+                return Ok(cache_table
+                    .cache
+                    .get_target(&source, &code)
+                    .unwrap_or_default());
             }
             dao::get_target(dm.pool, &source, &code).await
         })
@@ -90,7 +89,10 @@ impl AsDataManager for DataManager {
         Box::pin(async move {
             let cache_table = dm.cache_table.lock().await;
             if cache_table.is_cached(&format!("{target}<-{code}")) {
-                return Ok(cache_table.cache.get_source(&code, &target).unwrap_or_default());
+                return Ok(cache_table
+                    .cache
+                    .get_source(&code, &target)
+                    .unwrap_or_default());
             }
             dao::get_source(dm.pool, &code, &target).await
         })
@@ -109,7 +111,9 @@ impl AsDataManager for DataManager {
                 Ok(cache_table.cache.get_source_v_unchecked(&code, &target))
             } else {
                 let rs = dao::get_source_v(dm.pool, &code, &target).await?;
-                cache_table.cache.delete_saved_edge_with_code_target(&code, &target);
+                cache_table
+                    .cache
+                    .delete_saved_edge_with_code_target(&code, &target);
                 for source in &rs {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
@@ -133,7 +137,9 @@ impl AsDataManager for DataManager {
             }
 
             let rs = dao::get_target_v(dm.pool, &source, &code).await?;
-            cache_table.cache.delete_saved_edge_with_source_code(&source, &code);
+            cache_table
+                .cache
+                .delete_saved_edge_with_source_code(&source, &code);
             for target in &rs {
                 cache_table.cache.insert_temp_edge(&source, &code, target);
             }
@@ -162,7 +168,9 @@ impl AsDataManager for DataManager {
 
             if !cache_table.is_cached(&format!("{source}->{code}")) {
                 let rs = dao::get_target_v(dm.pool, &source, &code).await?;
-                cache_table.cache.delete_saved_edge_with_source_code(&source, &code);
+                cache_table
+                    .cache
+                    .delete_saved_edge_with_source_code(&source, &code);
                 for target in &rs {
                     cache_table.cache.insert_temp_edge(&source, &code, target);
                 }
@@ -195,7 +203,9 @@ impl AsDataManager for DataManager {
 
             if !cache_table.is_cached(&format!("{target}<-{code}")) {
                 let rs = dao::get_source_v(dm.pool, &code, &target).await?;
-                cache_table.cache.delete_saved_edge_with_code_target(&code, &target);
+                cache_table
+                    .cache
+                    .delete_saved_edge_with_code_target(&code, &target);
                 for source in &rs {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
@@ -226,9 +236,7 @@ impl AsDataManager for DataManager {
                     cache_table.cache.insert_temp_edge(&source, &code, target);
                 }
             } else {
-                cache_table
-                    .delete_list_by_source
-                    .insert((source.to_string(), code.to_string()));
+                dao::delete_edge_with_source_code(dm.pool, &source, &code).await?;
                 for target in &target_v {
                     cache_table.cache.insert_edge(&source, &code, target);
                 }
@@ -256,9 +264,7 @@ impl AsDataManager for DataManager {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
             } else {
-                cache_table
-                    .delete_list_by_target
-                    .insert((code.to_string(), target.to_string()));
+                dao::delete_edge_with_code_target(dm.pool, &code, &target).await?;
                 for source in &source_v {
                     cache_table.cache.insert_edge(source, &code, &target);
                 }
@@ -273,12 +279,6 @@ impl AsDataManager for DataManager {
         Box::pin(async move {
             let mut cache_table = dm.cache_table.lock().await;
             cache_table.clear_cache();
-            for (source, code) in mem::take(&mut cache_table.delete_list_by_source) {
-                dao::delete_edge_with_source_code(dm.pool.clone(), &source, &code).await?;
-            }
-            for (code, target) in mem::take(&mut cache_table.delete_list_by_target) {
-                dao::delete_edge_with_code_target(dm.pool.clone(), &code, &target).await?;
-            }
             dao::insert_edge_mp(dm.pool.clone(), &cache_table.cache.take()).await?;
             Ok(())
         })
