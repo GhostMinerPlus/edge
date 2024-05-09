@@ -109,7 +109,7 @@ impl AsDataManager for DataManager {
                 Ok(cache_table.cache.get_source_v_unchecked(&code, &target))
             } else {
                 let rs = dao::get_source_v(dm.pool, &code, &target).await?;
-                cache_table.cache.delete_edge_with_code_target(&code, &target);
+                cache_table.cache.delete_saved_edge_with_code_target(&code, &target);
                 for source in &rs {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
@@ -133,7 +133,7 @@ impl AsDataManager for DataManager {
             }
 
             let rs = dao::get_target_v(dm.pool, &source, &code).await?;
-            cache_table.cache.delete_edge_with_source_code(&source, &code);
+            cache_table.cache.delete_saved_edge_with_source_code(&source, &code);
             for target in &rs {
                 cache_table.cache.insert_temp_edge(&source, &code, target);
             }
@@ -162,7 +162,7 @@ impl AsDataManager for DataManager {
 
             if !cache_table.is_cached(&format!("{source}->{code}")) {
                 let rs = dao::get_target_v(dm.pool, &source, &code).await?;
-                cache_table.cache.delete_edge_with_source_code(&source, &code);
+                cache_table.cache.delete_saved_edge_with_source_code(&source, &code);
                 for target in &rs {
                     cache_table.cache.insert_temp_edge(&source, &code, target);
                 }
@@ -195,7 +195,7 @@ impl AsDataManager for DataManager {
 
             if !cache_table.is_cached(&format!("{target}<-{code}")) {
                 let rs = dao::get_source_v(dm.pool, &code, &target).await?;
-                cache_table.cache.delete_edge_with_code_target(&code, &target);
+                cache_table.cache.delete_saved_edge_with_code_target(&code, &target);
                 for source in &rs {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
