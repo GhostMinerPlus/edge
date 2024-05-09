@@ -118,7 +118,7 @@ impl AsDataManager for DataManager {
                     cache_table.cache.insert_temp_edge(source, &code, &target);
                 }
                 cache_table.cache(format!("{target}<-{code}"));
-                Ok(rs)
+                Ok(cache_table.cache.get_source_v_unchecked(&code, &target))
             }
         })
     }
@@ -144,7 +144,7 @@ impl AsDataManager for DataManager {
                 cache_table.cache.insert_temp_edge(&source, &code, target);
             }
             cache_table.cache(format!("{source}->{code}"));
-            Ok(rs)
+            Ok(cache_table.cache.get_target_v_unchecked(&source, &code))
         })
     }
 
