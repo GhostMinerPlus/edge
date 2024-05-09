@@ -156,7 +156,7 @@ impl AsDataManager for DataManager {
                 for target in &target_v {
                     cache_table.cache.insert_temp_edge(&source, &code, target);
                 }
-                cache_table.is_cached(&format!("{source}->{code}"));
+                cache_table.cache(format!("{source}->{code}"));
                 return Ok(());
             }
 
