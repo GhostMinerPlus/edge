@@ -16,7 +16,19 @@ impl HttpServer {
         log::debug!("executing {script_vn}");
         let mut edge_engine = EdgeEngine::new(dm);
         let rs = edge_engine
-            .execute(&serde_json::from_str(&script_vn).unwrap())
+            .execute(&json::parse(&script_vn).unwrap())
+            .await?;
+        edge_engine.commit().await?;
+        log::info!("commited");
+        Ok(rs.dump())
+    }
+
+    async fn execute1(dm: Box<dyn AsDataManager>, script_vn: String) -> io::Result<String> {
+        log::info!("executing");
+        log::debug!("executing {script_vn}");
+        let mut edge_engine = EdgeEngine::new(dm);
+        let rs = edge_engine
+            .execute1(&serde_json::from_str(&script_vn).unwrap())
             .await?;
         edge_engine.commit().await?;
         log::info!("commited");
@@ -36,6 +48,19 @@ impl HttpServer {
         }
     }
 
+    async fn http_execute1(
+        State(dm): State<Arc<Box<dyn AsDataManager>>>,
+        script_vn: String,
+    ) -> (StatusCode, String) {
+        match Self::execute1(dm.divide(), script_vn).await {
+            Ok(s) => (StatusCode::OK, s),
+            Err(e) => {
+                log::warn!("when http_execute:\n{e}");
+                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            }
+        }
+    }
+
     pub fn new(dm: Box<dyn AsDataManager>) -> Self {
         Self { dm }
     }
@@ -44,7 +69,7 @@ impl HttpServer {
         let mut edge_engine = EdgeEngine::new(self.dm.divide());
 
         let rs = edge_engine
-            .execute(&ScriptTree {
+            .execute1(&ScriptTree {
                 script: [
                     "$->$output = = root->name _",
                     "$->$output += = root->ip _",
@@ -64,6 +89,10 @@ impl HttpServer {
             .route(
                 &format!("/{}/execute", name),
                 routing::post(HttpServer::http_execute),
+            )
+            .route(
+                &format!("/{}/execute1", name),
+                routing::post(HttpServer::http_execute1),
             )
             .with_state(Arc::new(self.dm));
         // run our app with hyper, listening globally on port 3000

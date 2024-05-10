@@ -59,7 +59,7 @@ fn main() -> io::Result<()> {
             let mut edge_engine = EdgeEngine::new(dm.divide());
             // config.ip, config.port, config.name
             edge_engine
-                .execute(&ScriptTree {
+                .execute1(&ScriptTree {
                     script: [
                         format!("root->name = = {} _", config.name),
                         format!("root->ip = = {} _", config.ip),
