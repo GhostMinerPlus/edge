@@ -148,6 +148,55 @@ impl AsDataManager for DataManager {
         })
     }
 
+    fn load_source_v(
+        &mut self,
+        code: &str,
+        target: &str,
+    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        let dm = self.clone();
+        let (code, target) = (code.to_string(), target.to_string());
+        Box::pin(async move {
+            let mut cache_table = dm.cache_table.lock().await;
+            if cache_table.is_cached(&format!("{target}<-{code}")) {
+                return Ok(());
+            }
+            let rs = dao::get_source_v(dm.pool, &code, &target).await?;
+            cache_table
+                .cache
+                .delete_saved_edge_with_code_target(&code, &target);
+            for source in &rs {
+                cache_table.cache.insert_temp_edge(source, &code, &target);
+            }
+            cache_table.cache(format!("{target}<-{code}"));
+            Ok(())
+        })
+    }
+
+    fn load_target_v(
+        &mut self,
+        source: &str,
+        code: &str,
+    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        let dm = self.clone();
+        let (source, code) = (source.to_string(), code.to_string());
+        Box::pin(async move {
+            let mut cache_table = dm.cache_table.lock().await;
+            if cache_table.is_cached(&format!("{source}->{code}")) {
+                return Ok(());
+            }
+
+            let rs = dao::get_target_v(dm.pool, &source, &code).await?;
+            cache_table
+                .cache
+                .delete_saved_edge_with_source_code(&source, &code);
+            for target in &rs {
+                cache_table.cache.insert_temp_edge(&source, &code, target);
+            }
+            cache_table.cache(format!("{source}->{code}"));
+            Ok(())
+        })
+    }
+
     fn append_target_v(
         &mut self,
         source: &str,
