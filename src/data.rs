@@ -1,286 +1,102 @@
-use std::{collections::HashSet, io, pin::Pin, sync::Arc};
+use std::{future, io, pin::Pin};
 
-use edge_lib::{data::AsDataManager, mem_table::MemTable};
+use edge_lib::{data::AsDataManager, Path};
 use sqlx::{MySql, Pool};
-use tokio::sync::Mutex;
 
 mod dao;
 
-fn is_temp(code: &str) -> bool {
-    code.starts_with('$')
-}
-
-struct CacheTable {
-    cache: MemTable,
-    cache_set: HashSet<String>,
-}
-
-impl CacheTable {
-    fn new() -> Self {
-        Self {
-            cache: MemTable::new(),
-            cache_set: HashSet::new(),
-        }
-    }
-
-    fn is_cached(&self, path: &str) -> bool {
-        self.cache_set.contains(path)
-    }
-
-    fn cache(&mut self, path: String) {
-        self.cache_set.insert(path);
-    }
-
-    fn clear_cache(&mut self) {
-        self.cache_set.clear();
-    }
-}
-
 // Public
 #[derive(Clone)]
-pub struct DataManager {
+pub struct DbDataManager {
     pool: Pool<MySql>,
-    cache_table: Arc<Mutex<CacheTable>>,
 }
 
-impl DataManager {
-    pub fn new(pool: Pool<MySql>) -> Self {
-        Self {
-            pool,
-            cache_table: Arc::new(Mutex::new(CacheTable::new())),
-        }
+impl DbDataManager {
+    pub fn new(global: Pool<MySql>) -> Self {
+        Self { pool: global }
     }
 }
 
-impl AsDataManager for DataManager {
+impl AsDataManager for DbDataManager {
     fn divide(&self) -> Box<dyn AsDataManager> {
         Box::new(Self {
             pool: self.pool.clone(),
-            cache_table: Arc::new(Mutex::new(CacheTable::new())),
         })
     }
-
-    fn get_target(
-        &mut self,
-        source: &str,
-        code: &str,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<String>> + Send>> {
-        let dm = self.clone();
-        let (source, code) = (source.to_string(), code.to_string());
-        Box::pin(async move {
-            let cache_table = dm.cache_table.lock().await;
-            if cache_table.is_cached(&format!("{source}->{code}")) {
-                return Ok(cache_table
-                    .cache
-                    .get_target(&source, &code)
-                    .unwrap_or_default());
-            }
-            dao::get_target(dm.pool, &source, &code).await
-        })
-    }
-
-    fn get_source(
-        &mut self,
-        code: &str,
-        target: &str,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<String>> + Send>> {
-        let dm = self.clone();
-        let (code, target) = (code.to_string(), target.to_string());
-        Box::pin(async move {
-            let cache_table = dm.cache_table.lock().await;
-            if cache_table.is_cached(&format!("{target}<-{code}")) {
-                return Ok(cache_table
-                    .cache
-                    .get_source(&code, &target)
-                    .unwrap_or_default());
-            }
-            dao::get_source(dm.pool, &code, &target).await
-        })
-    }
-
-    fn get_source_v(
-        &mut self,
-        code: &str,
-        target: &str,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
-        let dm = self.clone();
-        let (code, target) = (code.to_string(), target.to_string());
-        Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            if cache_table.is_cached(&format!("{target}<-{code}")) {
-                Ok(cache_table.cache.get_source_v_unchecked(&code, &target))
-            } else {
-                let rs = dao::get_source_v(dm.pool, &code, &target).await?;
-                cache_table
-                    .cache
-                    .delete_saved_edge_with_code_target(&code, &target);
-                for source in &rs {
-                    cache_table.cache.insert_temp_edge(source, &code, &target);
-                }
-                cache_table.cache(format!("{target}<-{code}"));
-                Ok(cache_table.cache.get_source_v_unchecked(&code, &target))
-            }
-        })
-    }
-
-    fn get_target_v(
-        &mut self,
-        source: &str,
-        code: &str,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
-        let dm = self.clone();
-        let (source, code) = (source.to_string(), code.to_string());
-        Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            if cache_table.is_cached(&format!("{source}->{code}")) {
-                return Ok(cache_table.cache.get_target_v_unchecked(&source, &code));
-            }
-
-            let rs = dao::get_target_v(dm.pool, &source, &code).await?;
-            cache_table
-                .cache
-                .delete_saved_edge_with_source_code(&source, &code);
-            for target in &rs {
-                cache_table.cache.insert_temp_edge(&source, &code, target);
-            }
-            cache_table.cache(format!("{source}->{code}"));
-            Ok(cache_table.cache.get_target_v_unchecked(&source, &code))
-        })
-    }
-
-    fn append_target_v(
-        &mut self,
-        source: &str,
-        code: &str,
-        target_v: &Vec<String>,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        let dm = self.clone();
-        let (source, code, target_v) = (source.to_string(), code.to_string(), target_v.clone());
-        Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            if is_temp(&code) {
-                for target in &target_v {
-                    cache_table.cache.insert_temp_edge(&source, &code, target);
-                }
-                cache_table.cache(format!("{source}->{code}"));
-                return Ok(());
-            }
-
-            if !cache_table.is_cached(&format!("{source}->{code}")) {
-                let rs = dao::get_target_v(dm.pool, &source, &code).await?;
-                cache_table
-                    .cache
-                    .delete_saved_edge_with_source_code(&source, &code);
-                for target in &rs {
-                    cache_table.cache.insert_temp_edge(&source, &code, target);
-                }
-            }
-            for target in &target_v {
-                cache_table.cache.insert_edge(&source, &code, target);
-            }
-            cache_table.cache(format!("{source}->{code}"));
-            Ok(())
-        })
-    }
-
-    fn append_source_v(
-        &mut self,
-        source_v: &Vec<String>,
-        code: &str,
-        target: &str,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        let dm = self.clone();
-        let (source_v, code, target) = (source_v.clone(), code.to_string(), target.to_string());
-        Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            if is_temp(&code) {
-                for source in &source_v {
-                    cache_table.cache.insert_temp_edge(source, &code, &target);
-                }
-                cache_table.cache(format!("{target}<-{code}"));
-                return Ok(());
-            }
-
-            if !cache_table.is_cached(&format!("{target}<-{code}")) {
-                let rs = dao::get_source_v(dm.pool, &code, &target).await?;
-                cache_table
-                    .cache
-                    .delete_saved_edge_with_code_target(&code, &target);
-                for source in &rs {
-                    cache_table.cache.insert_temp_edge(source, &code, &target);
-                }
-            }
-            for source in &source_v {
-                cache_table.cache.insert_edge(source, &code, &target);
-            }
-            cache_table.cache(format!("{target}<-{code}"));
-            Ok(())
-        })
-    }
-
-    fn set_target_v(
-        &mut self,
-        source: &str,
-        code: &str,
-        target_v: &Vec<String>,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        let dm = self.clone();
-        let (source, code, target_v) = (source.to_string(), code.to_string(), target_v.clone());
-        Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            cache_table
-                .cache
-                .delete_edge_with_source_code(&source, &code);
-            if is_temp(&code) {
-                for target in &target_v {
-                    cache_table.cache.insert_temp_edge(&source, &code, target);
-                }
-            } else {
-                dao::delete_edge_with_source_code(dm.pool, &source, &code).await?;
-                for target in &target_v {
-                    cache_table.cache.insert_edge(&source, &code, target);
-                }
-            }
-            cache_table.cache(format!("{source}->{code}"));
-            Ok(())
-        })
-    }
-
-    fn set_source_v(
-        &mut self,
-        source_v: &Vec<String>,
-        code: &str,
-        target: &str,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        let dm = self.clone();
-        let (source_v, code, target) = (source_v.clone(), code.to_string(), target.to_string());
-        Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            cache_table
-                .cache
-                .delete_edge_with_code_target(&code, &target);
-            if is_temp(&code) {
-                for source in &source_v {
-                    cache_table.cache.insert_temp_edge(source, &code, &target);
-                }
-            } else {
-                dao::delete_edge_with_code_target(dm.pool, &code, &target).await?;
-                for source in &source_v {
-                    cache_table.cache.insert_edge(source, &code, &target);
-                }
-            }
-            cache_table.cache(format!("{target}<-{code}"));
-            Ok(())
-        })
-    }
-
     fn commit(&mut self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
-        let dm = self.clone();
+        Box::pin(future::ready(Ok(())))
+    }
+
+    fn append(
+        &mut self,
+        path: &Path,
+        item_v: Vec<String>,
+    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        if path.step_v.is_empty() {
+            return Box::pin(future::ready(Ok(())));
+        }
+        let mut this = self.clone();
+        let mut path = path.clone();
         Box::pin(async move {
-            let mut cache_table = dm.cache_table.lock().await;
-            cache_table.clear_cache();
-            dao::insert_edge_mp(dm.pool.clone(), &cache_table.cache.take()).await?;
+            let step = path.step_v.pop().unwrap();
+            let root_v = this.get(&path).await?;
+            for source in &root_v {
+                dao::insert_edge(this.pool.clone(), source, &step.code, &item_v).await?;
+            }
             Ok(())
+        })
+    }
+
+    fn set(
+        &mut self,
+        path: &Path,
+        item_v: Vec<String>,
+    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        if path.step_v.is_empty() {
+            return Box::pin(future::ready(Ok(())));
+        }
+        let mut this = self.clone();
+        let mut path = path.clone();
+        Box::pin(async move {
+            let step = path.step_v.pop().unwrap();
+            let root_v = this.get(&path).await?;
+            for source in &root_v {
+                dao::delete_edge_with_source_code(this.pool.clone(), source, &step.code).await?;
+                dao::insert_edge(this.pool.clone(), source, &step.code, &item_v).await?;
+            }
+            Ok(())
+        })
+    }
+
+    fn get(
+        &mut self,
+        path: &Path,
+    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
+        let this = self.clone();
+        let mut path = path.clone();
+        Box::pin(async move {
+            let mut rs = vec![path.root.clone()];
+            while !path.step_v.is_empty() {
+                let step = path.step_v.remove(0);
+                if step.arrow == "->" {
+                    let mut n_rs = Vec::new();
+                    for source in &rs {
+                        n_rs.extend(
+                            dao::get_target_v(this.pool.clone(), source, &step.code).await?,
+                        );
+                    }
+                    rs = n_rs;
+                } else {
+                    let mut n_rs = Vec::new();
+                    for target in &rs {
+                        n_rs.extend(
+                            dao::get_source_v(this.pool.clone(), &step.code, target).await?,
+                        );
+                    }
+                    rs = n_rs;
+                }
+            }
+            Ok(rs)
         })
     }
 }
