@@ -23,6 +23,7 @@ impl AsDataManager for DbDataManager {
             pool: self.pool.clone(),
         })
     }
+
     fn commit(&mut self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
         Box::pin(future::ready(Ok(())))
     }
