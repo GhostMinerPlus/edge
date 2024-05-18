@@ -99,7 +99,7 @@ fn gen_sql_stm(first_step: &Step, step_v: &[Step]) -> String {
         }
     }).reduce(|acc, item| {
         format!("{acc}\n{item}")
-    }).unwrap();
+    }).unwrap_or_default();
     format!("{sql}\n{join_v}")
 }
 
