@@ -74,30 +74,7 @@ impl AsDataManager for DbDataManager {
         path: &Path,
     ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
         let this = self.clone();
-        let mut path = path.clone();
-        Box::pin(async move {
-            let mut rs = vec![path.root.clone()];
-            while !path.step_v.is_empty() {
-                let step = path.step_v.remove(0);
-                if step.arrow == "->" {
-                    let mut n_rs = Vec::new();
-                    for source in &rs {
-                        n_rs.extend(
-                            dao::get_target_v(this.pool.clone(), source, &step.code).await?,
-                        );
-                    }
-                    rs = n_rs;
-                } else {
-                    let mut n_rs = Vec::new();
-                    for target in &rs {
-                        n_rs.extend(
-                            dao::get_source_v(this.pool.clone(), &step.code, target).await?,
-                        );
-                    }
-                    rs = n_rs;
-                }
-            }
-            Ok(rs)
-        })
+        let path = path.clone();
+        Box::pin(async move { dao::get(this.pool.clone(), &path).await })
     }
 }
