@@ -73,12 +73,12 @@ pub async fn get(pool: Pool<MySql>, path: &Path) -> io::Result<Vec<String>> {
 fn gen_sql_stm(first_step: &Step, step_v: &[Step]) -> String {
     let sql = if first_step.arrow == "->" {
         format!(
-            "select {}_v.root from (select target as root from edge_t where source=? and code=?) 0_v",
+            "select {}_v.root from (select target as root, id from edge_t where source=? and code=?) 0_v",
             step_v.len(),
         )
     } else {
         format!(
-            "select {}_v.root from (select source as root from edge_t where target=? and code=?) 0_v",
+            "select {}_v.root from (select source as root, id from edge_t where target=? and code=?) 0_v",
             step_v.len(),
         )
     };
@@ -90,17 +90,17 @@ fn gen_sql_stm(first_step: &Step, step_v: &[Step]) -> String {
         no += 1;
         if step.arrow == "->" {
             format!(
-                "join (select target as root, source from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
+                "join (select target as root, source, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
             )
         } else {
             format!(
-                "join (select source as root, target from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
+                "join (select source as root, target, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
             )
         }
     }).reduce(|acc, item| {
         format!("{acc}\n{item}")
     }).unwrap_or_default();
-    format!("{sql}\n{join_v}")
+    format!("{sql}\n{join_v} order by {}_v.id", step_v.len())
 }
 
 #[test]
