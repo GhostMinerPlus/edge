@@ -74,6 +74,9 @@ impl AsDataManager for DbDataManager {
         path: &Path,
     ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
         if path.step_v.is_empty() {
+            if path.root.is_empty() {
+                return Box::pin(future::ready(Ok(vec![])));
+            }
             return Box::pin(future::ready(Ok(vec![path.root.clone()])));
         }
         let this = self.clone();
