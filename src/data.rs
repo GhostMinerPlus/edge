@@ -63,6 +63,8 @@ impl AsDataManager for DbDataManager {
             let root_v = this.get(&path).await?;
             for source in &root_v {
                 dao::delete_edge_with_source_code(this.pool.clone(), source, &step.code).await?;
+            }
+            for source in &root_v {
                 dao::insert_edge(this.pool.clone(), source, &step.code, &item_v).await?;
             }
             Ok(())
