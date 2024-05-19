@@ -4,9 +4,7 @@ use edge_lib::{Path, Step};
 use sqlx::{MySql, Pool, Row};
 
 // Public
-pub async fn clear(
-    pool: Pool<MySql>,
-) -> io::Result<()> {
+pub async fn clear(pool: Pool<MySql>) -> io::Result<()> {
     sqlx::query("delete from edge_t where 1 = 1")
         .execute(&pool)
         .await
@@ -120,12 +118,10 @@ fn test_gen_sql() {
             arrow: "->".to_string(),
             code: "code".to_string(),
         },
-        &vec![
-            Step {
-                arrow: "->".to_string(),
-                code: "code".to_string(),
-            }
-        ],
+        &vec![Step {
+            arrow: "->".to_string(),
+            code: "code".to_string(),
+        }],
     );
     println!("{sql}")
 }

@@ -17,6 +17,7 @@ struct Config {
     db_url: String,
     thread_num: u8,
     log_level: String,
+    key: String,
 }
 
 impl Default for Config {
@@ -28,6 +29,7 @@ impl Default for Config {
             db_url: Default::default(),
             thread_num: 8,
             log_level: "INFO".to_string(),
+            key: format!(""),
         }
     }
 }
@@ -67,6 +69,7 @@ fn main() -> io::Result<()> {
                         format!("root->name = = {} _", config.name),
                         format!("root->ip = = {} _", config.ip),
                         format!("root->port = = {} _", config.port),
+                        format!("root->key = = {} _", config.key),
                     ]
                     .join("\n"),
                     name: "".to_string(),
