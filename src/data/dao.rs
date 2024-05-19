@@ -4,6 +4,16 @@ use edge_lib::{Path, Step};
 use sqlx::{MySql, Pool, Row};
 
 // Public
+pub async fn clear(
+    pool: Pool<MySql>,
+) -> io::Result<()> {
+    sqlx::query("delete from edge_t where 1 = 1")
+        .execute(&pool)
+        .await
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    Ok(())
+}
+
 pub async fn delete_edge_with_source_code(
     pool: Pool<MySql>,
     source: &str,

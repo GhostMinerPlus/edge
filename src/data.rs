@@ -85,4 +85,8 @@ impl AsDataManager for DbDataManager {
         let path = path.clone();
         Box::pin(async move { dao::get(this.pool.clone(), &path).await })
     }
+
+    fn clear(&mut self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+        Box::pin(dao::clear(self.pool.clone()))
+    }
 }
