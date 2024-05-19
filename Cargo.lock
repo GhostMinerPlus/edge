@@ -432,7 +432,7 @@ dependencies = [
 [[package]]
 name = "edge_lib"
 version = "0.1.0"
-source = "git+https://github.com/GhostMinerPlus/edge_lib.git#7d8e78e80eeaef52cf80097d5068680b192d76ce"
+source = "git+https://github.com/GhostMinerPlus/edge_lib.git#383a295ff7340c33e70770ffeb033d988e4352c6"
 dependencies = [
  "async-recursion",
  "json",
