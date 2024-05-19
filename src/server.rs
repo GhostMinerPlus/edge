@@ -7,6 +7,7 @@ use std::{io, sync::Arc};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
+    response::Response,
     routing, Json, Router,
 };
 use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, ScriptTree};
@@ -27,12 +28,19 @@ async fn http_register(
 async fn http_login(
     State(dm): State<Arc<Box<dyn AsDataManager>>>,
     Json(auth): Json<crypto::Auth>,
-) -> (StatusCode, String) {
+) -> Response<String> {
     match service::login(dm.divide(), &auth).await {
-        Ok(s) => (StatusCode::OK, s),
+        Ok(token) => Response::builder()
+            .header("Set-Cookie", format!("token={token}"))
+            .status(StatusCode::OK)
+            .body(format!("success"))
+            .unwrap(),
         Err(e) => {
             log::warn!("when http_login:\n{e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string())
+                .unwrap()
         }
     }
 }
