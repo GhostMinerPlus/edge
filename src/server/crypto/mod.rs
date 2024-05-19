@@ -5,6 +5,8 @@ use jwt::{AlgorithmType, Header, SignWithKey, Token, VerifyWithKey};
 use serde::{Deserialize, Serialize};
 use sha2::Sha512;
 
+use crate::err;
+
 #[derive(Debug, Serialize)]
 pub struct User {
     pub email: String,
@@ -32,14 +34,14 @@ pub fn gen_token(key: &str, auth: &Auth) -> io::Result<String> {
         .to_string())
 }
 
-pub fn parse_token(key: &str, token_str: &str) -> io::Result<User> {
+pub fn parse_token(key: &str, token_str: &str) -> err::Result<User> {
     let key: Hmac<Sha512> =
-        Hmac::new_from_slice(&hex2byte_v(key)).map_err(|e| io::Error::other(e))?;
+        Hmac::new_from_slice(&hex2byte_v(key)).map_err(|e| err::Error::Other(e.to_string()))?;
     let token: Token<Header, BTreeMap<String, String>, _> = token_str
         .verify_with_key(&key)
-        .map_err(|e| io::Error::other(e))?;
+        .map_err(|e| err::Error::Other(e.to_string()))?;
     let claims = token.claims();
-    let email = claims.get("email").ok_or(io::Error::other("no email"))?;
+    let email = claims.get("email").ok_or(err::Error::Other("no email".to_string()))?;
     Ok(User {
         email: email.clone(),
     })

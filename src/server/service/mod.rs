@@ -3,19 +3,21 @@ use std::{collections::HashMap, io};
 use axum::http::HeaderMap;
 use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, Path, ScriptTree};
 
+use crate::err;
+
 use super::crypto;
 
 // Public
-pub fn get_cookie(hm: &HeaderMap) -> io::Result<HashMap<String, String>> {
+pub fn get_cookie(hm: &HeaderMap) -> err::Result<HashMap<String, String>> {
     let cookie: &str = match hm.get("Cookie") {
         Some(r) => match r.to_str() {
             Ok(r) => r,
             Err(e) => {
-                return Err(io::Error::other(e));
+                return Err(err::Error::Other(e.to_string()));
             }
         },
         None => {
-            return Err(io::Error::other("no cookie"));
+            return Err(err::Error::Other(format!("no cookie")));
         }
     };
     let pair_v: Vec<Vec<&str>> = cookie
@@ -36,16 +38,19 @@ pub fn get_cookie(hm: &HeaderMap) -> io::Result<HashMap<String, String>> {
 pub async fn parse_auth(
     dm: &mut dyn AsDataManager,
     cookie: &HashMap<String, String>,
-) -> io::Result<crypto::User> {
+) -> err::Result<crypto::User> {
     let token = match cookie.get("token") {
         Some(r) => r,
         None => {
-            return Err(io::Error::other("no token"));
+            return Err(err::Error::Other("no token".to_lowercase()));
         }
     };
-    let key = dm.get(&Path::from_str("root->key")).await?;
+    let key = dm
+        .get(&Path::from_str("root->key"))
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
     if key.is_empty() {
-        return Err(io::Error::other("no key"));
+        return Err(err::Error::Other("no key".to_string()));
     }
     crypto::parse_token(&key[0], token)
 }
@@ -109,9 +114,11 @@ pub async fn execute(
     mut dm: Box<dyn AsDataManager>,
     hm: &HeaderMap,
     script_vn: String,
-) -> io::Result<String> {
-    let cookie = get_cookie(hm)?;
-    let auth = parse_auth(&mut *dm, &cookie).await?;
+) -> err::Result<String> {
+    let cookie = get_cookie(hm).map_err(|_| err::Error::NotLogin)?;
+    let auth = parse_auth(&mut *dm, &cookie)
+        .await
+        .map_err(|_| err::Error::NotLogin)?;
     log::info!("email: {}", auth.email);
 
     log::info!("executing");
@@ -119,8 +126,12 @@ pub async fn execute(
     let mut edge_engine = EdgeEngine::new(dm);
     let rs = edge_engine
         .execute(&json::parse(&script_vn).unwrap())
-        .await?;
-    edge_engine.commit().await?;
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
+    edge_engine
+        .commit()
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
     log::info!("commited");
     Ok(rs.dump())
 }
@@ -129,9 +140,11 @@ pub async fn execute1(
     mut dm: Box<dyn AsDataManager>,
     hm: &HeaderMap,
     script_vn: String,
-) -> io::Result<String> {
-    let cookie = get_cookie(hm)?;
-    let auth = parse_auth(&mut *dm, &cookie).await?;
+) -> err::Result<String> {
+    let cookie = get_cookie(hm).map_err(|_| err::Error::NotLogin)?;
+    let auth = parse_auth(&mut *dm, &cookie)
+        .await
+        .map_err(|_| err::Error::NotLogin)?;
     log::info!("email: {}", auth.email);
 
     log::info!("executing");
@@ -139,8 +152,12 @@ pub async fn execute1(
     let mut edge_engine = EdgeEngine::new(dm);
     let rs = edge_engine
         .execute1(&serde_json::from_str(&script_vn).unwrap())
-        .await?;
-    edge_engine.commit().await?;
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
+    edge_engine
+        .commit()
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
     log::info!("commited");
     Ok(rs.dump())
 }

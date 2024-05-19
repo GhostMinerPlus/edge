@@ -12,6 +12,8 @@ use axum::{
 };
 use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, ScriptTree};
 
+use crate::err;
+
 async fn http_register(
     State(dm): State<Arc<Box<dyn AsDataManager>>>,
     Json(auth): Json<crypto::Auth>,
@@ -69,12 +71,21 @@ async fn http_execute(
     hm: HeaderMap,
     State(dm): State<Arc<Box<dyn AsDataManager>>>,
     script_vn: String,
-) -> (StatusCode, String) {
+) -> Response<String> {
     match service::execute(dm.divide(), &hm, script_vn).await {
-        Ok(s) => (StatusCode::OK, s),
+        Ok(s) => Response::builder().status(StatusCode::OK).body(s).unwrap(),
         Err(e) => {
             log::warn!("when http_execute:\n{e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            match e {
+                err::Error::Other(msg) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(msg)
+                    .unwrap(),
+                err::Error::NotLogin => Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(format!(""))
+                    .unwrap(),
+            }
         }
     }
 }
@@ -83,12 +94,21 @@ async fn http_execute1(
     hm: HeaderMap,
     State(dm): State<Arc<Box<dyn AsDataManager>>>,
     script_vn: String,
-) -> (StatusCode, String) {
+) -> Response<String> {
     match service::execute1(dm.divide(), &hm, script_vn).await {
-        Ok(s) => (StatusCode::OK, s),
+        Ok(s) => Response::builder().status(StatusCode::OK).body(s).unwrap(),
         Err(e) => {
             log::warn!("when http_execute:\n{e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            match e {
+                err::Error::Other(msg) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(msg)
+                    .unwrap(),
+                err::Error::NotLogin => Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(format!(""))
+                    .unwrap(),
+            }
         }
     }
 }
