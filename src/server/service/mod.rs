@@ -21,7 +21,7 @@ pub fn get_cookie(hm: &HeaderMap) -> io::Result<HashMap<String, String>> {
     let pair_v: Vec<Vec<&str>> = cookie
         .split(';')
         .into_iter()
-        .map(|pair| pair.split(':').collect::<Vec<&str>>())
+        .map(|pair| pair.split('=').collect::<Vec<&str>>())
         .collect();
     let mut cookie = HashMap::with_capacity(pair_v.len());
     for pair in pair_v {
