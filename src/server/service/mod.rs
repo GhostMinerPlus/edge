@@ -7,7 +7,7 @@ use super::crypto;
 
 // Public
 pub fn get_cookie(hm: &HeaderMap) -> io::Result<HashMap<String, String>> {
-    let cookie: &str = match hm.get("cookie") {
+    let cookie: &str = match hm.get("Cookie") {
         Some(r) => match r.to_str() {
             Ok(r) => r,
             Err(e) => {
