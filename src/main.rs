@@ -1,7 +1,7 @@
 use std::{io, time::Duration};
 
 use earth::AsConfig;
-use edge::{data::DbDataManager, server};
+use edge::{connector, data::DbDataManager, server};
 use edge_lib::{
     data::{AsDataManager, RecDataManager},
     AsEdgeEngine, EdgeEngine, ScriptTree,
@@ -18,6 +18,7 @@ struct Config {
     thread_num: u8,
     log_level: String,
     key: String,
+    moon_servers: Vec<String>,
 }
 
 impl Default for Config {
@@ -30,6 +31,7 @@ impl Default for Config {
             thread_num: 8,
             log_level: "INFO".to_string(),
             key: format!(""),
+            moon_servers: Vec::new(),
         }
     }
 }
@@ -63,21 +65,29 @@ fn main() -> io::Result<()> {
             let dm = RecDataManager::new(Box::new(DbDataManager::new(pool)));
             let mut edge_engine = EdgeEngine::new(dm.divide());
             // config.ip, config.port, config.name
+            let base_script = [
+                format!("root->name = = {} _", config.name),
+                format!("root->ip = = {} _", config.ip),
+                format!("root->port = = {} _", config.port),
+                format!("root->key = = {} _", config.key),
+            ]
+            .join("\n");
+            let option_script = config
+                .moon_servers
+                .into_iter()
+                .map(|moon_server| format!("root->moon_server += = {moon_server} _"))
+                .reduce(|acc, line| format!("{acc}\n{line}"))
+                .unwrap_or(String::new());
             edge_engine
                 .execute1(&ScriptTree {
-                    script: [
-                        format!("root->name = = {} _", config.name),
-                        format!("root->ip = = {} _", config.ip),
-                        format!("root->port = = {} _", config.port),
-                        format!("root->key = = {} _", config.key),
-                    ]
-                    .join("\n"),
+                    script: format!("{base_script}\n{option_script}"),
                     name: "".to_string(),
                     next_v: vec![],
                 })
                 .await?;
             edge_engine.commit().await?;
 
+            tokio::spawn(connector::HttpConnector::new(dm.divide()).run());
             tokio::spawn(server::HttpServer::new(dm.divide()).run());
             loop {
                 log::info!("alive");
