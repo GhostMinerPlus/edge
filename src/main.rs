@@ -69,6 +69,7 @@ fn main() -> io::Result<()> {
                 format!("root->name = = {} _", config.name),
                 format!("root->ip = = {} _", config.ip),
                 format!("root->port = = {} _", config.port),
+                format!("root->path = = {} _", format!("/{}", config.name)),
                 format!("root->key = = {} _", config.key),
             ]
             .join("\n");
