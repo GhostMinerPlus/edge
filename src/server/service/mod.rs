@@ -115,10 +115,10 @@ pub async fn execute(
     hm: &HeaderMap,
     script_vn: String,
 ) -> err::Result<String> {
-    let cookie = get_cookie(hm).map_err(|_| err::Error::NotLogin)?;
+    let cookie = get_cookie(hm).map_err(|e| err::Error::NotLogin(e.to_string()))?;
     let auth = parse_auth(&mut *dm, &cookie)
         .await
-        .map_err(|_| err::Error::NotLogin)?;
+        .map_err(|e| err::Error::NotLogin(e.to_string()))?;
     log::info!("email: {}", auth.email);
 
     log::info!("executing");
@@ -141,10 +141,10 @@ pub async fn execute1(
     hm: &HeaderMap,
     script_vn: String,
 ) -> err::Result<String> {
-    let cookie = get_cookie(hm).map_err(|_| err::Error::NotLogin)?;
+    let cookie = get_cookie(hm).map_err(|e| err::Error::NotLogin(e.to_string()))?;
     let auth = parse_auth(&mut *dm, &cookie)
         .await
-        .map_err(|_| err::Error::NotLogin)?;
+        .map_err(|e| err::Error::NotLogin(e.to_string()))?;
     log::info!("email: {}", auth.email);
 
     log::info!("executing");

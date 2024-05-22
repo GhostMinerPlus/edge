@@ -81,9 +81,9 @@ async fn http_execute(
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(msg)
                     .unwrap(),
-                err::Error::NotLogin => Response::builder()
+                err::Error::NotLogin(msg) => Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
-                    .body(format!(""))
+                    .body(msg)
                     .unwrap(),
             }
         }
@@ -104,9 +104,9 @@ async fn http_execute1(
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(msg)
                     .unwrap(),
-                err::Error::NotLogin => Response::builder()
+                err::Error::NotLogin(msg) => Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
-                    .body(format!(""))
+                    .body(msg)
                     .unwrap(),
             }
         }
