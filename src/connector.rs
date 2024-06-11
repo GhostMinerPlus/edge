@@ -1,16 +1,16 @@
-use std::{io, time::Duration};
+use std::{io, sync::Arc, time::Duration};
 
-use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, ScriptTree};
+use edge_lib::{data::AsDataManager, EdgeEngine, ScriptTree};
 use tokio::time;
 
 use crate::util;
 
 pub struct HttpConnector {
-    dm: Box<dyn AsDataManager>,
+    dm: Arc<dyn AsDataManager>,
 }
 
 impl HttpConnector {
-    pub fn new(dm: Box<dyn AsDataManager>) -> Self {
+    pub fn new(dm: Arc<dyn AsDataManager>) -> Self {
         Self { dm }
     }
 
@@ -102,7 +102,7 @@ impl HttpConnector {
 mod tests {
     use edge_lib::{
         data::{AsDataManager, MemDataManager},
-        AsEdgeEngine, EdgeEngine, Path, ScriptTree,
+        EdgeEngine, Path, ScriptTree,
     };
 
     #[test]
@@ -113,7 +113,7 @@ mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                let mut dm = MemDataManager::new();
+                let dm = MemDataManager::new();
                 let mut edge_engine = EdgeEngine::new(dm.divide());
                 // config.ip, config.port, config.name
                 let name = "test";

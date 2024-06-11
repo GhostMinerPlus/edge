@@ -1,10 +1,10 @@
-use std::{io, time::Duration};
+use std::{io, sync::Arc, time::Duration};
 
 use earth::AsConfig;
 use edge::{connector, data::DbDataManager, server};
 use edge_lib::{
     data::{AsDataManager, RecDataManager},
-    AsEdgeEngine, EdgeEngine, ScriptTree,
+    EdgeEngine, ScriptTree,
 };
 use serde::{Deserialize, Serialize};
 use tokio::time;
@@ -62,7 +62,7 @@ fn main() -> io::Result<()> {
             let pool = sqlx::Pool::connect(&config.db_url)
                 .await
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
-            let dm = RecDataManager::new(Box::new(DbDataManager::new(pool)));
+            let dm = RecDataManager::new(Arc::new(DbDataManager::new(pool)));
             let mut edge_engine = EdgeEngine::new(dm.divide());
             // config.ip, config.port, config.name
             let base_script = [

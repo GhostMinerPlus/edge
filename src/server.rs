@@ -10,12 +10,12 @@ use axum::{
     response::Response,
     routing, Json, Router,
 };
-use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, ScriptTree};
+use edge_lib::{data::AsDataManager, EdgeEngine, ScriptTree};
 
 use crate::err;
 
 async fn http_register(
-    State(dm): State<Arc<Box<dyn AsDataManager>>>,
+    State(dm): State<Arc<dyn AsDataManager>>,
     Json(auth): Json<crypto::Auth>,
 ) -> (StatusCode, String) {
     match service::register(dm.divide(), &auth).await {
@@ -28,7 +28,7 @@ async fn http_register(
 }
 
 async fn http_login(
-    State(dm): State<Arc<Box<dyn AsDataManager>>>,
+    State(dm): State<Arc<dyn AsDataManager>>,
     Json(auth): Json<crypto::Auth>,
 ) -> Response<String> {
     match service::login(dm.divide(), &auth).await {
@@ -49,7 +49,7 @@ async fn http_login(
 
 async fn http_parse_token(
     hm: HeaderMap,
-    State(dm): State<Arc<Box<dyn AsDataManager>>>,
+    State(dm): State<Arc<dyn AsDataManager>>,
 ) -> (StatusCode, String) {
     let cookie = match service::get_cookie(&hm) {
         Ok(r) => r,
@@ -58,7 +58,7 @@ async fn http_parse_token(
             return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
         }
     };
-    match service::parse_auth(&mut *dm.divide(), &cookie).await {
+    match service::parse_auth(dm.divide(), &cookie).await {
         Ok(s) => (StatusCode::OK, serde_json::to_string(&s).unwrap()),
         Err(e) => {
             log::warn!("when http_parse_token:\n{e}");
@@ -69,7 +69,7 @@ async fn http_parse_token(
 
 async fn http_execute(
     hm: HeaderMap,
-    State(dm): State<Arc<Box<dyn AsDataManager>>>,
+    State(dm): State<Arc<dyn AsDataManager>>,
     script_vn: String,
 ) -> Response<String> {
     match service::execute(dm.divide(), &hm, script_vn).await {
@@ -92,7 +92,7 @@ async fn http_execute(
 
 async fn http_execute1(
     hm: HeaderMap,
-    State(dm): State<Arc<Box<dyn AsDataManager>>>,
+    State(dm): State<Arc<dyn AsDataManager>>,
     script_vn: String,
 ) -> Response<String> {
     match service::execute1(dm.divide(), &hm, script_vn).await {
@@ -115,11 +115,11 @@ async fn http_execute1(
 
 // Public
 pub struct HttpServer {
-    dm: Box<dyn AsDataManager>,
+    dm: Arc<dyn AsDataManager>,
 }
 
 impl HttpServer {
-    pub fn new(dm: Box<dyn AsDataManager>) -> Self {
+    pub fn new(dm: Arc<dyn AsDataManager>) -> Self {
         Self { dm }
     }
 
@@ -153,7 +153,7 @@ impl HttpServer {
             )
             .route(&format!("/{}/execute", name), routing::post(http_execute))
             .route(&format!("/{}/execute1", name), routing::post(http_execute1))
-            .with_state(Arc::new(self.dm));
+            .with_state(self.dm.clone());
         // run our app with hyper, listening globally on port 3000
         let address = format!("{}:{}", ip, port);
         log::info!("serving at {address}/{}", name);

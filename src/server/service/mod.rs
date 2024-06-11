@@ -1,7 +1,7 @@
-use std::{collections::HashMap, io};
+use std::{collections::HashMap, io, sync::Arc};
 
 use axum::http::HeaderMap;
-use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, Path, ScriptTree};
+use edge_lib::{data::AsDataManager, EdgeEngine, Path, ScriptTree};
 
 use crate::err;
 
@@ -36,7 +36,7 @@ pub fn get_cookie(hm: &HeaderMap) -> err::Result<HashMap<String, String>> {
 }
 
 pub async fn parse_auth(
-    dm: &mut dyn AsDataManager,
+    dm: Arc<dyn AsDataManager>,
     cookie: &HashMap<String, String>,
 ) -> err::Result<crypto::User> {
     let token = match cookie.get("token") {
@@ -55,7 +55,7 @@ pub async fn parse_auth(
     crypto::parse_token(&key[0], token)
 }
 
-pub async fn register(mut dm: Box<dyn AsDataManager>, auth: &crypto::Auth) -> io::Result<()> {
+pub async fn register(dm: Arc<dyn AsDataManager>, auth: &crypto::Auth) -> io::Result<()> {
     let key_v = dm.get(&Path::from_str("root->key")).await?;
     if key_v.is_empty() {
         return Err(io::Error::other("no key"));
@@ -86,7 +86,7 @@ pub async fn register(mut dm: Box<dyn AsDataManager>, auth: &crypto::Auth) -> io
     Ok(())
 }
 
-pub async fn login(mut dm: Box<dyn AsDataManager>, auth: &crypto::Auth) -> io::Result<String> {
+pub async fn login(dm: Arc<dyn AsDataManager>, auth: &crypto::Auth) -> io::Result<String> {
     let key_v = dm.get(&Path::from_str("root->key")).await?;
     if key_v.is_empty() {
         return Err(io::Error::other("no key"));
@@ -111,12 +111,12 @@ pub async fn login(mut dm: Box<dyn AsDataManager>, auth: &crypto::Auth) -> io::R
 }
 
 pub async fn execute(
-    mut dm: Box<dyn AsDataManager>,
+    dm: Arc<dyn AsDataManager>,
     hm: &HeaderMap,
     script_vn: String,
 ) -> err::Result<String> {
     let cookie = get_cookie(hm).map_err(|e| err::Error::NotLogin(e.to_string()))?;
-    let auth = parse_auth(&mut *dm, &cookie)
+    let auth = parse_auth(dm.clone(), &cookie)
         .await
         .map_err(|e| err::Error::NotLogin(e.to_string()))?;
     log::info!("email: {}", auth.email);
@@ -137,12 +137,12 @@ pub async fn execute(
 }
 
 pub async fn execute1(
-    mut dm: Box<dyn AsDataManager>,
+    dm: Arc<dyn AsDataManager>,
     hm: &HeaderMap,
     script_vn: String,
 ) -> err::Result<String> {
     let cookie = get_cookie(hm).map_err(|e| err::Error::NotLogin(e.to_string()))?;
-    let auth = parse_auth(&mut *dm, &cookie)
+    let auth = parse_auth(dm.clone(), &cookie)
         .await
         .map_err(|e| err::Error::NotLogin(e.to_string()))?;
     log::info!("email: {}", auth.email);

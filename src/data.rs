@@ -1,4 +1,4 @@
-use std::{future, io, pin::Pin};
+use std::{future, io, pin::Pin, sync::Arc};
 
 use edge_lib::{data::AsDataManager, Path};
 use sqlx::{MySql, Pool};
@@ -18,25 +18,25 @@ impl DbDataManager {
 }
 
 impl AsDataManager for DbDataManager {
-    fn divide(&self) -> Box<dyn AsDataManager> {
-        Box::new(Self {
+    fn divide(&self) -> Arc<dyn AsDataManager> {
+        Arc::new(Self {
             pool: self.pool.clone(),
         })
     }
 
-    fn commit(&mut self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+    fn commit(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
         Box::pin(future::ready(Ok(())))
     }
 
     fn append(
-        &mut self,
+        &self,
         path: &Path,
         item_v: Vec<String>,
     ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
         if path.step_v.is_empty() {
             return Box::pin(future::ready(Ok(())));
         }
-        let mut this = self.clone();
+        let this = self.clone();
         let mut path = path.clone();
         Box::pin(async move {
             let step = path.step_v.pop().unwrap();
@@ -49,14 +49,14 @@ impl AsDataManager for DbDataManager {
     }
 
     fn set(
-        &mut self,
+        &self,
         path: &Path,
         item_v: Vec<String>,
     ) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
         if path.step_v.is_empty() {
             return Box::pin(future::ready(Ok(())));
         }
-        let mut this = self.clone();
+        let this = self.clone();
         let mut path = path.clone();
         Box::pin(async move {
             let step = path.step_v.pop().unwrap();
@@ -72,7 +72,7 @@ impl AsDataManager for DbDataManager {
     }
 
     fn get(
-        &mut self,
+        &self,
         path: &Path,
     ) -> Pin<Box<dyn std::future::Future<Output = io::Result<Vec<String>>> + Send>> {
         if path.step_v.is_empty() {
@@ -86,7 +86,7 @@ impl AsDataManager for DbDataManager {
         Box::pin(async move { dao::get(this.pool.clone(), &path).await })
     }
 
-    fn clear(&mut self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
+    fn clear(&self) -> Pin<Box<dyn std::future::Future<Output = io::Result<()>> + Send>> {
         Box::pin(dao::clear(self.pool.clone()))
     }
 }
