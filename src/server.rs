@@ -1,67 +1,125 @@
 //! Server that provides services.
+mod crypto;
+mod service;
 
 use std::{io, sync::Arc};
 
-use axum::{extract::State, http::StatusCode, routing, Router};
-use edge_lib::{data::AsDataManager, AsEdgeEngine, EdgeEngine, ScriptTree};
+use axum::{
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::Response,
+    routing, Json, Router,
+};
+use edge_lib::{data::AsDataManager, EdgeEngine, ScriptTree};
+
+use crate::err;
+
+async fn http_register(
+    State(dm): State<Arc<dyn AsDataManager>>,
+    Json(auth): Json<crypto::Auth>,
+) -> (StatusCode, String) {
+    match service::register(dm.divide(), &auth).await {
+        Ok(_) => (StatusCode::OK, format!("success")),
+        Err(e) => {
+            log::warn!("when http_register:\n{e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        }
+    }
+}
+
+async fn http_login(
+    State(dm): State<Arc<dyn AsDataManager>>,
+    Json(auth): Json<crypto::Auth>,
+) -> Response<String> {
+    match service::login(dm.divide(), &auth).await {
+        Ok(token) => Response::builder()
+            .header("Set-Cookie", format!("token={token}"))
+            .status(StatusCode::OK)
+            .body(format!("success"))
+            .unwrap(),
+        Err(e) => {
+            log::warn!("when http_login:\n{e}");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string())
+                .unwrap()
+        }
+    }
+}
+
+async fn http_parse_token(
+    hm: HeaderMap,
+    State(dm): State<Arc<dyn AsDataManager>>,
+) -> (StatusCode, String) {
+    let cookie = match service::get_cookie(&hm) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("when http_parse_token:\n{e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        }
+    };
+    match service::parse_auth(dm.divide(), &cookie).await {
+        Ok(s) => (StatusCode::OK, serde_json::to_string(&s).unwrap()),
+        Err(e) => {
+            log::warn!("when http_parse_token:\n{e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        }
+    }
+}
+
+async fn http_execute(
+    hm: HeaderMap,
+    State(dm): State<Arc<dyn AsDataManager>>,
+    script_vn: String,
+) -> Response<String> {
+    match service::execute(dm.divide(), &hm, script_vn).await {
+        Ok(s) => Response::builder().status(StatusCode::OK).body(s).unwrap(),
+        Err(e) => {
+            log::warn!("when http_execute:\n{e}");
+            match e {
+                err::Error::Other(msg) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(msg)
+                    .unwrap(),
+                err::Error::NotLogin(msg) => Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(msg)
+                    .unwrap(),
+            }
+        }
+    }
+}
+
+async fn http_execute1(
+    hm: HeaderMap,
+    State(dm): State<Arc<dyn AsDataManager>>,
+    script_vn: String,
+) -> Response<String> {
+    match service::execute1(dm.divide(), &hm, script_vn).await {
+        Ok(s) => Response::builder().status(StatusCode::OK).body(s).unwrap(),
+        Err(e) => {
+            log::warn!("when http_execute:\n{e}");
+            match e {
+                err::Error::Other(msg) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(msg)
+                    .unwrap(),
+                err::Error::NotLogin(msg) => Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(msg)
+                    .unwrap(),
+            }
+        }
+    }
+}
 
 // Public
 pub struct HttpServer {
-    dm: Box<dyn AsDataManager>,
+    dm: Arc<dyn AsDataManager>,
 }
 
 impl HttpServer {
-    async fn execute(dm: Box<dyn AsDataManager>, script_vn: String) -> io::Result<String> {
-        log::info!("executing");
-        log::debug!("executing {script_vn}");
-        let mut edge_engine = EdgeEngine::new(dm);
-        let rs = edge_engine
-            .execute(&json::parse(&script_vn).unwrap())
-            .await?;
-        edge_engine.commit().await?;
-        log::info!("commited");
-        Ok(rs.dump())
-    }
-
-    async fn execute1(dm: Box<dyn AsDataManager>, script_vn: String) -> io::Result<String> {
-        log::info!("executing");
-        log::debug!("executing {script_vn}");
-        let mut edge_engine = EdgeEngine::new(dm);
-        let rs = edge_engine
-            .execute1(&serde_json::from_str(&script_vn).unwrap())
-            .await?;
-        edge_engine.commit().await?;
-        log::info!("commited");
-        Ok(rs.dump())
-    }
-
-    async fn http_execute(
-        State(dm): State<Arc<Box<dyn AsDataManager>>>,
-        script_vn: String,
-    ) -> (StatusCode, String) {
-        match Self::execute(dm.divide(), script_vn).await {
-            Ok(s) => (StatusCode::OK, s),
-            Err(e) => {
-                log::warn!("when http_execute:\n{e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-            }
-        }
-    }
-
-    async fn http_execute1(
-        State(dm): State<Arc<Box<dyn AsDataManager>>>,
-        script_vn: String,
-    ) -> (StatusCode, String) {
-        match Self::execute1(dm.divide(), script_vn).await {
-            Ok(s) => (StatusCode::OK, s),
-            Err(e) => {
-                log::warn!("when http_execute:\n{e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-            }
-        }
-    }
-
-    pub fn new(dm: Box<dyn AsDataManager>) -> Self {
+    pub fn new(dm: Arc<dyn AsDataManager>) -> Self {
         Self { dm }
     }
 
@@ -84,17 +142,18 @@ impl HttpServer {
         let name = rs["info"][0].as_str().unwrap();
         let ip = rs["info"][1].as_str().unwrap();
         let port = rs["info"][2].as_str().unwrap();
+
         // build our application with a route
         let app = Router::new()
+            .route(&format!("/{}/register", name), routing::post(http_register))
+            .route(&format!("/{}/login", name), routing::post(http_login))
             .route(
-                &format!("/{}/execute", name),
-                routing::post(HttpServer::http_execute),
+                &format!("/{}/parse_token", name),
+                routing::post(http_parse_token),
             )
-            .route(
-                &format!("/{}/execute1", name),
-                routing::post(HttpServer::http_execute1),
-            )
-            .with_state(Arc::new(self.dm));
+            .route(&format!("/{}/execute", name), routing::post(http_execute))
+            .route(&format!("/{}/execute1", name), routing::post(http_execute1))
+            .with_state(self.dm.clone());
         // run our app with hyper, listening globally on port 3000
         let address = format!("{}:{}", ip, port);
         log::info!("serving at {address}/{}", name);
