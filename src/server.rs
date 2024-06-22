@@ -33,7 +33,7 @@ async fn http_login(
 ) -> Response<String> {
     match service::login(dm.divide(), &auth).await {
         Ok(token) => Response::builder()
-            .header("Set-Cookie", format!("token={token}"))
+            .header("Set-Cookie", format!("token={token}; Path=/"))
             .status(StatusCode::OK)
             .body(format!("success"))
             .unwrap(),
