@@ -1,6 +1,6 @@
 use std::{io, sync::Arc, time::Duration};
 
-use edge_lib::{data::AsDataManager, EdgeEngine, ScriptTree};
+use edge_lib::{data::{AsDataManager, Auth}, EdgeEngine, ScriptTree};
 use tokio::time;
 
 use crate::util;
@@ -25,7 +25,10 @@ impl HttpConnector {
     }
 
     async fn execute(&self) -> io::Result<()> {
-        let mut edge_engine = EdgeEngine::new(self.dm.divide());
+        let mut edge_engine = EdgeEngine::new(self.dm.divide(Auth {
+            uid: "root".to_string(),
+            gid_v: Vec::new(),
+        }));
 
         let rs = edge_engine
             .execute1(&ScriptTree {
@@ -101,8 +104,7 @@ impl HttpConnector {
 #[cfg(test)]
 mod tests {
     use edge_lib::{
-        data::{AsDataManager, MemDataManager},
-        EdgeEngine, Path, ScriptTree,
+        data::{AsDataManager, Auth, MemDataManager}, util::Path, EdgeEngine, ScriptTree
     };
 
     #[test]
@@ -114,7 +116,10 @@ mod tests {
             .unwrap()
             .block_on(async {
                 let dm = MemDataManager::new();
-                let mut edge_engine = EdgeEngine::new(dm.divide());
+                let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
+                    uid: "root".to_string(),
+                    gid_v: Vec::new(),
+                }));
                 // config.ip, config.port, config.name
                 let name = "test";
                 let ip = "0.0.0.0";

@@ -1,7 +1,11 @@
 use std::{collections::HashMap, io, sync::Arc};
 
 use axum::http::HeaderMap;
-use edge_lib::{data::AsDataManager, EdgeEngine, Path, ScriptTree};
+use edge_lib::{
+    data::{AsDataManager, Auth},
+    util::Path,
+    EdgeEngine, ScriptTree,
+};
 
 use crate::err;
 
@@ -123,7 +127,10 @@ pub async fn execute(
 
     log::info!("executing");
     log::debug!("executing {script_vn}");
-    let mut edge_engine = EdgeEngine::new(dm);
+    let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
+        uid: auth.email,
+        gid_v: Vec::new(),
+    }));
     let rs = edge_engine
         .execute(&json::parse(&script_vn).unwrap())
         .await
@@ -149,7 +156,10 @@ pub async fn execute1(
 
     log::info!("executing");
     log::debug!("executing {script_vn}");
-    let mut edge_engine = EdgeEngine::new(dm);
+    let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
+        uid: auth.email,
+        gid_v: Vec::new(),
+    }));
     let rs = edge_engine
         .execute1(&serde_json::from_str(&script_vn).unwrap())
         .await
