@@ -120,7 +120,7 @@ pub async fn login(dm: Arc<dyn AsDataManager>, auth: &crypto::Auth) -> io::Resul
     if rs["result"].is_empty() {
         return Err(io::Error::other("user not exists"));
     }
-    crypto::gen_token(&key_v[0], auth)
+    crypto::gen_token(&key_v[0], auth, Some(3600))
 }
 
 pub async fn execute(

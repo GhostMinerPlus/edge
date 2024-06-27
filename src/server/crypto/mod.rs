@@ -18,7 +18,7 @@ pub struct Auth {
     pub password: String,
 }
 
-pub fn gen_token(key: &str, auth: &Auth) -> io::Result<String> {
+pub fn gen_token(key: &str, auth: &Auth, life_op: Option<u64>) -> io::Result<String> {
     let key: Hmac<Sha512> =
         Hmac::new_from_slice(&util::hex2byte_v(key)).map_err(|e| io::Error::other(e))?;
     let header = Header {
@@ -26,13 +26,15 @@ pub fn gen_token(key: &str, auth: &Auth) -> io::Result<String> {
         ..Default::default()
     };
     let mut claims = BTreeMap::new();
-    let exp = time::SystemTime::now()
-        .duration_since(time::UNIX_EPOCH)
-        .expect("can not get timestamp")
-        .as_secs()
-        + 3600;
+    if let Some(life) = life_op {
+        let exp = time::SystemTime::now()
+            .duration_since(time::UNIX_EPOCH)
+            .expect("can not get timestamp")
+            .as_secs()
+            + life;
+        claims.insert("exp", format!("{exp}"));
+    }
     claims.insert("email", auth.email.clone());
-    claims.insert("exp", format!("{exp}"));
     Ok(Token::new(header, claims)
         .sign_with_key(&key)
         .map_err(|e| io::Error::other(e))?
@@ -55,7 +57,7 @@ pub fn parse_token(key: &str, token_str: &str) -> err::Result<User> {
             .duration_since(time::UNIX_EPOCH)
             .expect("can not get timestamp")
             .as_secs();
-        if exp - now > 3600 {
+        if exp < now {
             return Err(err::Error::NotLogin(format!("invalid token")));
         }
     }
@@ -90,6 +92,7 @@ mod tests {
                 email: format!("email"),
                 password: format!("password"),
             },
+            None
         )
         .unwrap();
         let user = parse_token(key, &token).unwrap();
