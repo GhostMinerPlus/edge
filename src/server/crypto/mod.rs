@@ -41,23 +41,23 @@ pub fn gen_token(key: &str, auth: &Auth) -> io::Result<String> {
 }
 
 pub fn parse_token(key: &str, token_str: &str) -> err::Result<User> {
-    let key: Hmac<Sha512> =
-        Hmac::new_from_slice(&util::hex2byte_v(key)).map_err(|e| err::Error::NotLogin(e.to_string()))?;
+    let key: Hmac<Sha512> = Hmac::new_from_slice(&util::hex2byte_v(key))
+        .map_err(|e| err::Error::NotLogin(e.to_string()))?;
     let token: Token<Header, BTreeMap<String, String>, _> = token_str
         .verify_with_key(&key)
         .map_err(|e| err::Error::NotLogin(e.to_string()))?;
     let claims = token.claims();
-    let exp = claims
-        .get("exp")
-        .ok_or(err::Error::NotLogin("no exp".to_string()))?
-        .parse::<u64>()
-        .map_err(|e| err::Error::NotLogin(e.to_string()))?;
-    let now = time::SystemTime::now()
-        .duration_since(time::UNIX_EPOCH)
-        .expect("can not get timestamp")
-        .as_secs();
-    if exp - now > 3600 {
-        return Err(err::Error::NotLogin(format!("invalid token")));
+    if let Some(exp) = claims.get("exp") {
+        let exp = exp
+            .parse::<u64>()
+            .map_err(|e| err::Error::NotLogin(e.to_string()))?;
+        let now = time::SystemTime::now()
+            .duration_since(time::UNIX_EPOCH)
+            .expect("can not get timestamp")
+            .as_secs();
+        if exp - now > 3600 {
+            return Err(err::Error::NotLogin(format!("invalid token")));
+        }
     }
     let email = claims
         .get("email")

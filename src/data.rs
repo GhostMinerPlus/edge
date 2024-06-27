@@ -19,6 +19,7 @@ impl DbDataManager {
         Self {
             auth: Auth {
                 uid: "root".to_string(),
+                gid: "root".to_string(),
                 gid_v: Vec::new(),
             },
             pool: global,

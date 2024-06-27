@@ -65,6 +65,7 @@ fn main() -> io::Result<()> {
             let dm = RecDataManager::new(Arc::new(DbDataManager::new(pool)));
             let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
                 uid: "root".to_string(),
+                gid: "root".to_string(),
                 gid_v: Vec::new(),
             }));
             // config.ip, config.port, config.name
@@ -93,10 +94,12 @@ fn main() -> io::Result<()> {
 
             tokio::spawn(connector::HttpConnector::new(dm.divide(Auth {
                 uid: "root".to_string(),
+                gid: "root".to_string(),
                 gid_v: Vec::new(),
             })).run());
             tokio::spawn(server::HttpServer::new(dm.divide(Auth {
                 uid: "root".to_string(),
+                gid: "root".to_string(),
                 gid_v: Vec::new(),
             })).run());
             loop {

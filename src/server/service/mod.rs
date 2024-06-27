@@ -39,16 +39,7 @@ pub fn get_cookie(hm: &HeaderMap) -> err::Result<HashMap<String, String>> {
     Ok(cookie)
 }
 
-pub async fn parse_auth(
-    dm: Arc<dyn AsDataManager>,
-    cookie: &HashMap<String, String>,
-) -> err::Result<crypto::User> {
-    let token = match cookie.get("token") {
-        Some(r) => r,
-        None => {
-            return Err(err::Error::Other("no token".to_lowercase()));
-        }
-    };
+pub async fn parse_token(dm: Arc<dyn AsDataManager>, token: &str) -> err::Result<crypto::User> {
     let key = dm
         .get(&Path::from_str("root->key"))
         .await
@@ -57,6 +48,24 @@ pub async fn parse_auth(
         return Err(err::Error::Other("no key".to_string()));
     }
     crypto::parse_token(&key[0], token)
+}
+
+pub async fn parse_auth(
+    dm: Arc<dyn AsDataManager>,
+    cookie: &HashMap<String, String>,
+) -> err::Result<(crypto::User, String)> {
+    let token = match cookie.get("token") {
+        Some(r) => r,
+        None => {
+            return Err(err::Error::Other("no token".to_lowercase()));
+        }
+    };
+    let user = parse_token(dm.clone(), token).await?;
+    let app = match cookie.get("app") {
+        Some(app) => parse_token(dm, app).await?.email,
+        None => user.email.clone(),
+    };
+    Ok((user, app))
 }
 
 pub async fn register(dm: Arc<dyn AsDataManager>, auth: &crypto::Auth) -> io::Result<()> {
@@ -123,12 +132,13 @@ pub async fn execute(
     let auth = parse_auth(dm.clone(), &cookie)
         .await
         .map_err(|e| err::Error::NotLogin(e.to_string()))?;
-    log::info!("email: {}", auth.email);
+    log::info!("email: {}", auth.0.email);
 
     log::info!("executing");
     log::debug!("executing {script_vn}");
     let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
-        uid: auth.email,
+        uid: auth.0.email,
+        gid: auth.1,
         gid_v: Vec::new(),
     }));
     let rs = edge_engine
@@ -152,12 +162,13 @@ pub async fn execute1(
     let auth = parse_auth(dm.clone(), &cookie)
         .await
         .map_err(|e| err::Error::NotLogin(e.to_string()))?;
-    log::info!("email: {}", auth.email);
+    log::info!("email: {}", auth.0.email);
 
     log::info!("executing");
     log::debug!("executing {script_vn}");
     let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
-        uid: auth.email,
+        uid: auth.0.email,
+        gid: auth.1,
         gid_v: Vec::new(),
     }));
     let rs = edge_engine

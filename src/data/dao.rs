@@ -18,8 +18,12 @@ pub async fn clear(pool: Pool<MySql>, auth: &Auth) -> io::Result<()> {
             .iter()
             .map(|gid| format!("'{gid}'"))
             .reduce(|acc, item| format!("{acc},{item}"))
-            .unwrap_or("''".to_string());
-        let sql = format!("delete from edge_t where uid = ? or gid in ({gid_v})");
+            .map(|s| format!("{s},"))
+            .unwrap_or("".to_string());
+        let sql = format!(
+            "delete from edge_t where uid = ? or gid in ({gid_v}null, '{}')",
+            auth.uid
+        );
         let mut stm = sqlx::query(&sql);
         stm = stm.bind(&auth.uid);
         stm.execute(&pool)
@@ -48,9 +52,10 @@ pub async fn delete_edge_with_source_code(
             .iter()
             .map(|gid| format!("'{gid}'"))
             .reduce(|acc, item| format!("{acc},{item}"))
-            .unwrap_or("''".to_string());
+            .map(|s| format!("{s},"))
+            .unwrap_or("".to_string());
         let sql = format!(
-            "delete from edge_t where source = ? and code = ? and (uid = ? or gid in ({gid_v}))"
+            "delete from edge_t where source = ? and code = ? and (uid = ? or gid in ({gid_v}null, '{}'))", auth.uid
         );
         sqlx::query(&sql)
             .bind(source)
@@ -93,7 +98,7 @@ pub async fn insert_edge(
             .bind(code)
             .bind(target)
             .bind(&auth.uid)
-            .bind(&auth.uid);
+            .bind(&auth.gid);
     }
 
     statement
@@ -165,15 +170,16 @@ fn gen_sql_stm(auth: &Auth, first_step: &Step, step_v: &[Step]) -> String {
         .iter()
         .map(|gid| format!("'{gid}'"))
         .reduce(|acc, item| format!("{acc},{item}"))
-        .unwrap_or("''".to_string());
+        .map(|s| format!("{s},"))
+        .unwrap_or("".to_string());
     let sql = if first_step.arrow == "->" {
         format!(
-            "select {}_v.root from (select target as root, id from edge_t where source=? and code=? and (uid='{uid}' or gid in ({gid_v}))) 0_v",
+            "select {}_v.root from (select target as root, id from edge_t where source=? and code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) 0_v",
             step_v.len(),
         )
     } else {
         format!(
-            "select {}_v.root from (select source as root, id from edge_t where target=? and code=? and (uid='{uid}' or gid in ({gid_v}))) 0_v",
+            "select {}_v.root from (select source as root, id from edge_t where target=? and code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) 0_v",
             step_v.len(),
         )
     };
@@ -185,11 +191,11 @@ fn gen_sql_stm(auth: &Auth, first_step: &Step, step_v: &[Step]) -> String {
         no += 1;
         if step.arrow == "->" {
             format!(
-                "join (select target as root, source, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}))) {no}_v on {no}_v.source = {p_root}.root",
+                "join (select target as root, source, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
             )
         } else {
             format!(
-                "join (select source as root, target, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}))) {no}_v on {no}_v.source = {p_root}.root",
+                "join (select source as root, target, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
             )
         }
     }).reduce(|acc, item| {
@@ -203,6 +209,7 @@ fn test_gen_sql() {
     let sql = gen_sql_stm(
         &Auth {
             uid: "".to_string(),
+            gid: "root".to_string(),
             gid_v: Vec::new(),
         },
         &Step {
