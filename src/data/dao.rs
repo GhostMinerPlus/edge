@@ -2,7 +2,7 @@ use std::io::{self, Error, ErrorKind};
 
 use edge_lib::{
     data::Auth,
-    util::{Path, Step},
+    util::Path,
 };
 use sqlx::{MySql, Pool, Row};
 
@@ -39,33 +39,7 @@ pub async fn delete_edge_with_source_code(
     source: &str,
     code: &str,
 ) -> io::Result<()> {
-    if auth.uid == "root" {
-        sqlx::query("delete from edge_t where source = ? and code = ?")
-            .bind(source)
-            .bind(code)
-            .execute(&pool)
-            .await
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    } else {
-        let gid_v = auth
-            .gid_v
-            .iter()
-            .map(|gid| format!("'{gid}'"))
-            .reduce(|acc, item| format!("{acc},{item}"))
-            .map(|s| format!("{s},"))
-            .unwrap_or("".to_string());
-        let sql = format!(
-            "delete from edge_t where source = ? and code = ? and (uid = ? or gid in ({gid_v}null, '{}'))", auth.uid
-        );
-        sqlx::query(&sql)
-            .bind(source)
-            .bind(code)
-            .bind(&auth.uid)
-            .execute(&pool)
-            .await
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    }
-    Ok(())
+    main::delete_edge_with_source_code::<dep::Dep>(pool, auth, source, code).await
 }
 
 pub async fn insert_edge(
@@ -111,9 +85,9 @@ pub async fn insert_edge(
 pub async fn get(pool: Pool<MySql>, auth: &Auth, path: &Path) -> io::Result<Vec<String>> {
     let first_step = &path.step_v[0];
     let sql = if auth.uid == "root" {
-        gen_root_sql_stm(first_step, &path.step_v[1..])
+        main::gen_root_sql_stm(first_step, &path.step_v[1..])
     } else {
-        gen_sql_stm(auth, first_step, &path.step_v[1..])
+        main::gen_sql_stm(auth, first_step, &path.step_v[1..])
     };
     let mut stm = sqlx::query(&sql).bind(&path.root);
     for step in &path.step_v {
@@ -130,62 +104,46 @@ pub async fn get(pool: Pool<MySql>, auth: &Auth, path: &Path) -> io::Result<Vec<
     Ok(arr)
 }
 
-fn gen_root_sql_stm(first_step: &Step, step_v: &[Step]) -> String {
-    let sql = if first_step.arrow == "->" {
-        format!(
-            "select {}_v.root from (select target as root, id from edge_t where source=? and code=?) 0_v",
-            step_v.len(),
-        )
-    } else {
-        format!(
-            "select {}_v.root from (select source as root, id from edge_t where target=? and code=?) 0_v",
-            step_v.len(),
-        )
-    };
-    let mut root = format!("0_v");
-    let mut no = 0;
-    let join_v = step_v.iter().map(|step| {
-        let p_root = root.clone();
-        root = format!("{no}_v");
-        no += 1;
-        if step.arrow == "->" {
-            format!(
-                "join (select target as root, source, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
-            )
-        } else {
-            format!(
-                "join (select source as root, target, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
-            )
-        }
-    }).reduce(|acc, item| {
-        format!("{acc}\n{item}")
-    }).unwrap_or_default();
-    format!("{sql}\n{join_v} order by {}_v.id", step_v.len())
-}
+mod main {
+    use std::io;
 
-fn gen_sql_stm(auth: &Auth, first_step: &Step, step_v: &[Step]) -> String {
-    let uid = &auth.uid;
-    let gid_v = auth
-        .gid_v
-        .iter()
-        .map(|gid| format!("'{gid}'"))
-        .reduce(|acc, item| format!("{acc},{item}"))
-        .map(|s| format!("{s},"))
-        .unwrap_or("".to_string());
-    let sql = if first_step.arrow == "->" {
-        format!(
+    use edge_lib::{data::Auth, util::Step};
+    use sqlx::{MySql, Pool};
+
+    use super::dep::AsDep;
+
+    pub async fn delete_edge_with_source_code<D: AsDep>(
+        pool: Pool<MySql>,
+        auth: &Auth,
+        source: &str,
+        code: &str,
+    ) -> io::Result<()> {
+        D::delete_edge_with_source_code(pool, auth, source, code).await
+    }
+
+    pub fn gen_sql_stm(auth: &Auth, first_step: &Step, step_v: &[Step]) -> String {
+        let uid = &auth.uid;
+        let gid_v = auth
+            .gid_v
+            .iter()
+            .map(|gid| format!("'{gid}'"))
+            .reduce(|acc, item| format!("{acc},{item}"))
+            .map(|s| format!("{s},"))
+            .unwrap_or("".to_string());
+        let sql = if first_step.arrow == "->" {
+            format!(
             "select {}_v.root from (select target as root, id from edge_t where source=? and code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) 0_v",
             step_v.len(),
         )
-    } else {
-        format!(
+        } else {
+            format!(
             "select {}_v.root from (select source as root, id from edge_t where target=? and code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) 0_v",
             step_v.len(),
         )
-    };
-    let mut root = format!("0_v");
-    let mut no = 0;
-    let join_v = step_v.iter().map(|step| {
+        };
+        let mut root = format!("0_v");
+        let mut no = 0;
+        let join_v = step_v.iter().map(|step| {
         let p_root = root.clone();
         root = format!("{no}_v");
         no += 1;
@@ -201,25 +159,112 @@ fn gen_sql_stm(auth: &Auth, first_step: &Step, step_v: &[Step]) -> String {
     }).reduce(|acc, item| {
         format!("{acc}\n{item}")
     }).unwrap_or_default();
-    format!("{sql}\n{join_v} order by {}_v.id", step_v.len())
+        format!("{sql}\n{join_v} order by {}_v.id", step_v.len())
+    }
+
+    #[cfg(test)]
+    mod test_gen_sql {
+        use edge_lib::{data::Auth, util::Step};
+
+        #[test]
+        fn test_gen_sql() {
+            let sql = super::gen_sql_stm(
+                &Auth {
+                    uid: "".to_string(),
+                    gid: "root".to_string(),
+                    gid_v: Vec::new(),
+                },
+                &Step {
+                    arrow: "->".to_string(),
+                    code: "code".to_string(),
+                },
+                &vec![Step {
+                    arrow: "->".to_string(),
+                    code: "code".to_string(),
+                }],
+            );
+            println!("{sql}")
+        }
+    }
+
+    pub fn gen_root_sql_stm(first_step: &Step, step_v: &[Step]) -> String {
+        let sql = if first_step.arrow == "->" {
+            format!(
+                "select {}_v.root from (select target as root, id from edge_t where source=? and code=?) 0_v",
+                step_v.len(),
+            )
+        } else {
+            format!(
+                "select {}_v.root from (select source as root, id from edge_t where target=? and code=?) 0_v",
+                step_v.len(),
+            )
+        };
+        let mut root = format!("0_v");
+        let mut no = 0;
+        let join_v = step_v.iter().map(|step| {
+            let p_root = root.clone();
+            root = format!("{no}_v");
+            no += 1;
+            if step.arrow == "->" {
+                format!(
+                    "join (select target as root, source, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
+                )
+            } else {
+                format!(
+                    "join (select source as root, target, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
+                )
+            }
+        }).reduce(|acc, item| {
+            format!("{acc}\n{item}")
+        }).unwrap_or_default();
+        format!("{sql}\n{join_v} order by {}_v.id", step_v.len())
+    }
 }
 
-#[test]
-fn test_gen_sql() {
-    let sql = gen_sql_stm(
-        &Auth {
-            uid: "".to_string(),
-            gid: "root".to_string(),
-            gid_v: Vec::new(),
-        },
-        &Step {
-            arrow: "->".to_string(),
-            code: "code".to_string(),
-        },
-        &vec![Step {
-            arrow: "->".to_string(),
-            code: "code".to_string(),
-        }],
-    );
-    println!("{sql}")
+mod dep {
+    use std::io::{self, Error, ErrorKind};
+
+    use edge_lib::data::Auth;
+    use sqlx::{MySql, Pool};
+
+    pub struct Dep {}
+
+    impl AsDep for Dep {}
+
+    pub trait AsDep {
+        async fn delete_edge_with_source_code(
+            pool: Pool<MySql>,
+            auth: &Auth,
+            source: &str,
+            code: &str,
+        ) -> io::Result<()> {
+            if auth.uid == "root" {
+                sqlx::query("delete from edge_t where source = ? and code = ?")
+                    .bind(source)
+                    .bind(code)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| Error::new(ErrorKind::Other, e))?;
+            } else {
+                let gid_v = auth
+                    .gid_v
+                    .iter()
+                    .map(|gid| format!("'{gid}'"))
+                    .reduce(|acc, item| format!("{acc},{item}"))
+                    .map(|s| format!("{s},"))
+                    .unwrap_or("".to_string());
+                let sql = format!(
+                    "delete from edge_t where source = ? and code = ? and (uid = ? or gid in ({gid_v}null, '{}'))", auth.uid
+                );
+                sqlx::query(&sql)
+                    .bind(source)
+                    .bind(code)
+                    .bind(&auth.uid)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| Error::new(ErrorKind::Other, e))?;
+            }
+            Ok(())
+        }
+    }
 }

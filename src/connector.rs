@@ -17,7 +17,7 @@ impl HttpConnector {
     pub async fn run(self) -> io::Result<()> {
         loop {
             if let Err(e) = self.execute().await {
-                log::warn!("when run:\n{e}");
+                log::warn!("{e}\nwhen run");
             }
 
             time::sleep(Duration::from_secs(10)).await;
@@ -25,8 +25,10 @@ impl HttpConnector {
     }
 
     async fn execute(&self) -> io::Result<()> {
-        let mut edge_engine = EdgeEngine::new(self.dm.clone());
+        let ip = util::native::get_global_ipv6()
+            .map_err(|e| io::Error::other(format!("{e}\nwhen execute")))?;
 
+        let mut edge_engine = EdgeEngine::new(self.dm.clone());
         let rs = edge_engine
             .execute1(&ScriptTree {
                 script: [
@@ -39,10 +41,9 @@ impl HttpConnector {
                 next_v: vec![],
             })
             .await
-            .map_err(|e| io::Error::other(format!("when execute:\n{e}")))?;
+            .map_err(|e| io::Error::other(format!("{e}\nwhen execute")))?;
         log::debug!("{rs}");
         let name = rs["info"][0].as_str().unwrap();
-        let ip = util::native::get_global_ipv6()?;
         let port = rs["info"][1].as_str().unwrap();
         let path = rs["info"][2].as_str().unwrap();
 
@@ -53,7 +54,7 @@ impl HttpConnector {
                 next_v: vec![],
             })
             .await
-            .map_err(|e| io::Error::other(format!("when execute:\n{e}")))?;
+            .map_err(|e| io::Error::other(format!("{e}\nwhen execute")))?;
         log::debug!("{rs}");
         let moon_server_v = &rs["moon_server"];
 
@@ -71,13 +72,13 @@ impl HttpConnector {
             let uri = match moon_server.as_str() {
                 Some(uri) => uri,
                 None => {
-                    log::error!("when execute:\nfailed to parse uri for moon_server");
+                    log::error!("failed to parse uri for moon_server\nwhen execute");
                     continue;
                 }
             };
             log::info!("reporting to {uri}");
             if let Err(e) = util::http_execute(&uri, format!("{{\"{script}\": null}}")).await {
-                log::warn!("when execute:\nwhen http_execute:\n{e}");
+                log::warn!("{e}\nwhen execute");
                 if let Err(e) = util::http_execute1(
                     &uri,
                     &ScriptTree {
@@ -88,7 +89,7 @@ impl HttpConnector {
                 )
                 .await
                 {
-                    log::warn!("when execute:\nwhen http_execute1:\n{e}");
+                    log::warn!("{e}\nwhen execute");
                 }
             } else {
                 log::info!("reported to {uri}");
@@ -101,7 +102,9 @@ impl HttpConnector {
 #[cfg(test)]
 mod tests {
     use edge_lib::{
-        data::{AsDataManager, Auth, MemDataManager}, util::Path, EdgeEngine, ScriptTree
+        data::{AsDataManager, Auth, MemDataManager},
+        util::Path,
+        EdgeEngine, ScriptTree,
     };
 
     #[test]

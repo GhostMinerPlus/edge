@@ -21,7 +21,7 @@ pub mod native {
 
         Err(io::Error::new(
             io::ErrorKind::NotFound,
-            "Faild to get a global ipv6",
+            "Faild to get a global ipv6\nwhen get_global_ipv6",
         ))
     }
 }
@@ -37,10 +37,9 @@ pub async fn http_execute(uri: &str, script: String) -> io::Result<String> {
             log::error!("{e}");
             io::Error::other(e)
         })?;
-    res.text().await.map_err(|e| {
-        log::error!("{e}");
-        io::Error::other(e)
-    })
+    res.text()
+        .await
+        .map_err(|e| io::Error::other(format!("{e}\nwhen http_execute")))
 }
 
 pub async fn http_execute1(uri: &str, script_tree: &ScriptTree) -> io::Result<String> {
@@ -54,10 +53,9 @@ pub async fn http_execute1(uri: &str, script_tree: &ScriptTree) -> io::Result<St
             log::error!("{e}");
             io::Error::other(e)
         })?;
-    res.text().await.map_err(|e| {
-        log::error!("{e}");
-        io::Error::other(e)
-    })
+    res.text()
+        .await
+        .map_err(|e| io::Error::other(format!("{e}\nwhen http_execute1")))
 }
 
 const NUM_2_HEXCHAR: [char; 16] = [
