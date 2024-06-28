@@ -1,9 +1,6 @@
 use std::io::{self, Error, ErrorKind};
 
-use edge_lib::{
-    data::Auth,
-    util::Path,
-};
+use edge_lib::{data::Auth, util::Path};
 use sqlx::{MySql, Pool, Row};
 
 pub async fn clear(pool: Pool<MySql>, auth: &Auth) -> io::Result<()> {
@@ -144,21 +141,21 @@ mod main {
         let mut root = format!("0_v");
         let mut no = 0;
         let join_v = step_v.iter().map(|step| {
-        let p_root = root.clone();
-        root = format!("{no}_v");
-        no += 1;
-        if step.arrow == "->" {
-            format!(
-                "join (select target as root, source, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
-            )
-        } else {
-            format!(
-                "join (select source as root, target, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
-            )
-        }
-    }).reduce(|acc, item| {
-        format!("{acc}\n{item}")
-    }).unwrap_or_default();
+            let p_root = root.clone();
+            no += 1;
+            root = format!("{no}_v");
+            if step.arrow == "->" {
+                format!(
+                    "join (select target as root, source, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
+                )
+            } else {
+                format!(
+                    "join (select source as root, target, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
+                )
+            }
+        }).reduce(|acc, item| {
+            format!("{acc}\n{item}")
+        }).unwrap_or_default();
         format!("{sql}\n{join_v} order by {}_v.id", step_v.len())
     }
 
@@ -203,8 +200,8 @@ mod main {
         let mut no = 0;
         let join_v = step_v.iter().map(|step| {
             let p_root = root.clone();
-            root = format!("{no}_v");
             no += 1;
+            root = format!("{no}_v");
             if step.arrow == "->" {
                 format!(
                     "join (select target as root, source, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
