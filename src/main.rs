@@ -3,7 +3,7 @@ use std::{io, sync::Arc, time::Duration};
 use earth::AsConfig;
 use edge::{connector, data::DbDataManager, server};
 use edge_lib::{
-    data::{AsDataManager, RecDataManager},
+    data::{AsDataManager, Auth, RecDataManager},
     EdgeEngine, ScriptTree,
 };
 use serde::{Deserialize, Serialize};
@@ -63,7 +63,11 @@ fn main() -> io::Result<()> {
                 .await
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
             let dm = RecDataManager::new(Arc::new(DbDataManager::new(pool)));
-            let mut edge_engine = EdgeEngine::new(dm.divide());
+            let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
+                uid: "root".to_string(),
+                gid: "root".to_string(),
+                gid_v: Vec::new(),
+            }));
             // config.ip, config.port, config.name
             let base_script = [
                 format!("root->name = = {} _", config.name),
@@ -88,8 +92,16 @@ fn main() -> io::Result<()> {
                 .await?;
             edge_engine.commit().await?;
 
-            tokio::spawn(connector::HttpConnector::new(dm.divide()).run());
-            tokio::spawn(server::HttpServer::new(dm.divide()).run());
+            tokio::spawn(connector::HttpConnector::new(dm.divide(Auth {
+                uid: "root".to_string(),
+                gid: "root".to_string(),
+                gid_v: Vec::new(),
+            })).run());
+            tokio::spawn(server::HttpServer::new(dm.divide(Auth {
+                uid: "root".to_string(),
+                gid: "root".to_string(),
+                gid_v: Vec::new(),
+            })).run());
             loop {
                 log::info!("alive");
                 time::sleep(Duration::from_secs(10)).await;

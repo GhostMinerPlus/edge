@@ -7,3 +7,5 @@ RUN cargo build --release
 FROM archlinux:latest
 
 COPY --from=builder /root/share/repository/edge/target/release/edge /usr/bin/
+
+WORKDIR /root/share

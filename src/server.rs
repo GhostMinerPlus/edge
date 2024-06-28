@@ -18,7 +18,7 @@ async fn http_register(
     State(dm): State<Arc<dyn AsDataManager>>,
     Json(auth): Json<crypto::Auth>,
 ) -> (StatusCode, String) {
-    match service::register(dm.divide(), &auth).await {
+    match service::register(dm, &auth).await {
         Ok(_) => (StatusCode::OK, format!("success")),
         Err(e) => {
             log::warn!("when http_register:\n{e}");
@@ -31,9 +31,9 @@ async fn http_login(
     State(dm): State<Arc<dyn AsDataManager>>,
     Json(auth): Json<crypto::Auth>,
 ) -> Response<String> {
-    match service::login(dm.divide(), &auth).await {
+    match service::login(dm, &auth).await {
         Ok(token) => Response::builder()
-            .header("Set-Cookie", format!("token={token}"))
+            .header("Set-Cookie", format!("token={token}; Path=/"))
             .status(StatusCode::OK)
             .body(format!("success"))
             .unwrap(),
@@ -58,7 +58,7 @@ async fn http_parse_token(
             return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
         }
     };
-    match service::parse_auth(dm.divide(), &cookie).await {
+    match service::parse_auth(dm, &cookie).await {
         Ok(s) => (StatusCode::OK, serde_json::to_string(&s).unwrap()),
         Err(e) => {
             log::warn!("when http_parse_token:\n{e}");
@@ -72,7 +72,7 @@ async fn http_execute(
     State(dm): State<Arc<dyn AsDataManager>>,
     script_vn: String,
 ) -> Response<String> {
-    match service::execute(dm.divide(), &hm, script_vn).await {
+    match service::execute(dm, &hm, script_vn).await {
         Ok(s) => Response::builder().status(StatusCode::OK).body(s).unwrap(),
         Err(e) => {
             log::warn!("when http_execute:\n{e}");
@@ -95,7 +95,7 @@ async fn http_execute1(
     State(dm): State<Arc<dyn AsDataManager>>,
     script_vn: String,
 ) -> Response<String> {
-    match service::execute1(dm.divide(), &hm, script_vn).await {
+    match service::execute1(dm, &hm, script_vn).await {
         Ok(s) => Response::builder().status(StatusCode::OK).body(s).unwrap(),
         Err(e) => {
             log::warn!("when http_execute:\n{e}");
@@ -124,7 +124,7 @@ impl HttpServer {
     }
 
     pub async fn run(self) -> io::Result<()> {
-        let mut edge_engine = EdgeEngine::new(self.dm.divide());
+        let mut edge_engine = EdgeEngine::new(self.dm.clone());
 
         let rs = edge_engine
             .execute1(&ScriptTree {
@@ -153,7 +153,7 @@ impl HttpServer {
             )
             .route(&format!("/{}/execute", name), routing::post(http_execute))
             .route(&format!("/{}/execute1", name), routing::post(http_execute1))
-            .with_state(self.dm.clone());
+            .with_state(self.dm);
         // run our app with hyper, listening globally on port 3000
         let address = format!("{}:{}", ip, port);
         log::info!("serving at {address}/{}", name);
