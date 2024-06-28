@@ -92,16 +92,22 @@ fn main() -> io::Result<()> {
                 .await?;
             edge_engine.commit().await?;
 
-            tokio::spawn(connector::HttpConnector::new(dm.divide(Auth {
-                uid: "root".to_string(),
-                gid: "root".to_string(),
-                gid_v: Vec::new(),
-            })).run());
-            tokio::spawn(server::HttpServer::new(dm.divide(Auth {
-                uid: "root".to_string(),
-                gid: "root".to_string(),
-                gid_v: Vec::new(),
-            })).run());
+            tokio::spawn(
+                connector::HttpConnector::new(dm.divide(Auth {
+                    uid: "root".to_string(),
+                    gid: "root".to_string(),
+                    gid_v: Vec::new(),
+                }))
+                .run(),
+            );
+            tokio::spawn(
+                server::HttpServer::new(dm.divide(Auth {
+                    uid: "root".to_string(),
+                    gid: "root".to_string(),
+                    gid_v: Vec::new(),
+                }))
+                .run(),
+            );
             loop {
                 log::info!("alive");
                 time::sleep(Duration::from_secs(10)).await;

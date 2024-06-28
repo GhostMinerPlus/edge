@@ -92,7 +92,7 @@ mod tests {
                 email: format!("email"),
                 password: format!("password"),
             },
-            None
+            None,
         )
         .unwrap();
         let user = parse_token(key, &token).unwrap();
