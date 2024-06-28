@@ -73,7 +73,6 @@ impl AsDataManager for DbDataManager {
         Box::pin(async move {
             let step = path.step_v.pop().unwrap();
             let root_v = this.get(&path).await?;
-            log::debug!("delete {}->{}: {}\nwhen set", path.to_string(), step.code, root_v.len());
             for source in &root_v {
                 dao::delete_edge_with_source_code(
                     this.pool.clone(),
