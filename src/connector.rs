@@ -17,7 +17,7 @@ impl HttpConnector {
     pub async fn run(self) -> io::Result<()> {
         loop {
             if let Err(e) = self.execute().await {
-                log::warn!("when run:\n{e}");
+                log::warn!("{e}\nwhen run");
             }
 
             time::sleep(Duration::from_secs(10)).await;
