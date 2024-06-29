@@ -156,7 +156,7 @@ mod main {
     ) -> Response<String> {
         match service::login(dm, &auth).await {
             Ok(token) => Response::builder()
-                .header("Set-Cookie", format!("token={token}; Path=/"))
+                .header("Set-Cookie", format!("writer={token}; Path=/"))
                 .status(StatusCode::OK)
                 .body(format!("success"))
                 .unwrap(),
