@@ -15,19 +15,19 @@ pub struct DbDataManager {
 }
 
 impl DbDataManager {
-    pub fn new(global: Pool<MySql>) -> Self {
+    pub fn new(global: Pool<MySql>, auth: Auth) -> Self {
         Self {
-            auth: Auth {
-                uid: "root".to_string(),
-                gid: "root".to_string(),
-                gid_v: Vec::new(),
-            },
+            auth,
             pool: global,
         }
     }
 }
 
 impl AsDataManager for DbDataManager {
+    fn get_auth(&self) -> Auth {
+        self.auth.clone()
+    }
+
     fn divide(&self, auth: Auth) -> Arc<dyn AsDataManager> {
         Arc::new(Self {
             auth,

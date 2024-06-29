@@ -4,28 +4,28 @@ use edge_lib::{data::Auth, util::Path};
 use sqlx::{MySql, Pool, Row};
 
 pub async fn clear(pool: Pool<MySql>, auth: &Auth) -> io::Result<()> {
-    if auth.uid == "root" {
+    if auth.is_root() {
         sqlx::query("delete from edge_t where 1 = 1")
             .execute(&pool)
             .await
             .map_err(|e| Error::new(ErrorKind::Other, e))?;
     } else {
-        let gid_v = auth
-            .gid_v
-            .iter()
-            .map(|gid| format!("'{gid}'"))
-            .reduce(|acc, item| format!("{acc},{item}"))
-            .map(|s| format!("{s},"))
-            .unwrap_or("".to_string());
-        let sql = format!(
-            "delete from edge_t where uid = ? or gid in ({gid_v}null, '{}')",
-            auth.uid
-        );
-        let mut stm = sqlx::query(&sql);
-        stm = stm.bind(&auth.uid);
-        stm.execute(&pool)
-            .await
-            .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        match auth {
+            Auth::Writer(paper, _) => {
+                sqlx::query("delete from edge_t where paper = ?")
+                    .bind(paper)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| Error::new(ErrorKind::Other, e))?;
+            }
+            Auth::Printer(pen) => {
+                sqlx::query("delete from edge_t where pen = ?")
+                    .bind(pen)
+                    .execute(&pool)
+                    .await
+                    .map_err(|e| Error::new(ErrorKind::Other, e))?;
+            }
+        }
     }
     Ok(())
 }
@@ -61,17 +61,21 @@ pub async fn insert_edge(
             }
         })
         .unwrap();
-    let sql = format!("insert into edge_t (source,code,target,uid,gid) values {value_v}");
+
+    let sql = format!("insert into edge_t (source,code,target,paper,pen) values {value_v}");
+    let (paper, pen) = match auth {
+        Auth::Writer(paper, pen) => (paper, pen),
+        Auth::Printer(pen) => (pen, pen),
+    };
     let mut statement = sqlx::query(&sql);
     for target in target_v {
         statement = statement
             .bind(source)
             .bind(code)
             .bind(target)
-            .bind(&auth.uid)
-            .bind(&auth.gid);
+            .bind(paper)
+            .bind(pen);
     }
-
     statement
         .execute(&pool)
         .await
@@ -81,11 +85,7 @@ pub async fn insert_edge(
 
 pub async fn get(pool: Pool<MySql>, auth: &Auth, path: &Path) -> io::Result<Vec<String>> {
     let first_step = &path.step_v[0];
-    let sql = if auth.uid == "root" {
-        main::gen_root_sql_stm(first_step, &path.step_v[1..])
-    } else {
-        main::gen_sql_stm(auth, first_step, &path.step_v[1..])
-    };
+    let sql = main::gen_sql_stm(auth, first_step, &path.step_v[1..]);
     let mut stm = sqlx::query(&sql).bind(&path.root);
     for step in &path.step_v {
         stm = stm.bind(&step.code);
@@ -119,22 +119,15 @@ mod main {
     }
 
     pub fn gen_sql_stm(auth: &Auth, first_step: &Step, step_v: &[Step]) -> String {
-        let uid = &auth.uid;
-        let gid_v = auth
-            .gid_v
-            .iter()
-            .map(|gid| format!("'{gid}'"))
-            .reduce(|acc, item| format!("{acc},{item}"))
-            .map(|s| format!("{s},"))
-            .unwrap_or("".to_string());
+        let auth_con = gen_auth_con(auth);
         let sql = if first_step.arrow == "->" {
             format!(
-            "select {}_v.root from (select target as root, id from edge_t where source=? and code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) 0_v",
+            "select {}_v.root from (select target as root, id from edge_t where source=? and code=? {auth_con}) 0_v",
             step_v.len(),
         )
         } else {
             format!(
-            "select {}_v.root from (select source as root, id from edge_t where target=? and code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) 0_v",
+            "select {}_v.root from (select source as root, id from edge_t where target=? and code=? {auth_con}) 0_v",
             step_v.len(),
         )
         };
@@ -146,11 +139,11 @@ mod main {
             root = format!("{no}_v");
             if step.arrow == "->" {
                 format!(
-                    "join (select target as root, source, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
+                    "join (select target as root, source, id from edge_t where code=? {auth_con}) {no}_v on {no}_v.source = {p_root}.root",
                 )
             } else {
                 format!(
-                    "join (select source as root, target, id from edge_t where code=? and (uid='{uid}' or gid in ({gid_v}null, '{uid}'))) {no}_v on {no}_v.source = {p_root}.root",
+                    "join (select source as root, target, id from edge_t where code=? {auth_con}) {no}_v on {no}_v.source = {p_root}.root",
                 )
             }
         }).reduce(|acc, item| {
@@ -166,11 +159,7 @@ mod main {
         #[test]
         fn test_gen_sql() {
             let sql = super::gen_sql_stm(
-                &Auth {
-                    uid: "".to_string(),
-                    gid: "root".to_string(),
-                    gid_v: Vec::new(),
-                },
+                &Auth::printer("root"),
                 &Step {
                     arrow: "->".to_string(),
                     code: "code".to_string(),
@@ -184,37 +173,14 @@ mod main {
         }
     }
 
-    pub fn gen_root_sql_stm(first_step: &Step, step_v: &[Step]) -> String {
-        let sql = if first_step.arrow == "->" {
-            format!(
-                "select {}_v.root from (select target as root, id from edge_t where source=? and code=?) 0_v",
-                step_v.len(),
-            )
-        } else {
-            format!(
-                "select {}_v.root from (select source as root, id from edge_t where target=? and code=?) 0_v",
-                step_v.len(),
-            )
-        };
-        let mut root = format!("0_v");
-        let mut no = 0;
-        let join_v = step_v.iter().map(|step| {
-            let p_root = root.clone();
-            no += 1;
-            root = format!("{no}_v");
-            if step.arrow == "->" {
-                format!(
-                    "join (select target as root, source, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
-                )
-            } else {
-                format!(
-                    "join (select source as root, target, id from edge_t where code=?) {no}_v on {no}_v.source = {p_root}.root",
-                )
-            }
-        }).reduce(|acc, item| {
-            format!("{acc}\n{item}")
-        }).unwrap_or_default();
-        format!("{sql}\n{join_v} order by {}_v.id", step_v.len())
+    fn gen_auth_con(auth: &Auth) -> String {
+        if auth.is_root() {
+            return String::new();
+        }
+        match auth {
+            Auth::Writer(paper, _) => format!("and paper = '{paper}'"),
+            Auth::Printer(pen) => format!("and pen = '{pen}'"),
+        }
     }
 }
 
@@ -235,7 +201,7 @@ mod dep {
             source: &str,
             code: &str,
         ) -> io::Result<()> {
-            if auth.uid == "root" {
+            if auth.is_root() {
                 sqlx::query("delete from edge_t where source = ? and code = ?")
                     .bind(source)
                     .bind(code)
@@ -243,25 +209,28 @@ mod dep {
                     .await
                     .map_err(|e| Error::new(ErrorKind::Other, e))?;
             } else {
-                let gid_v = auth
-                    .gid_v
-                    .iter()
-                    .map(|gid| format!("'{gid}'"))
-                    .reduce(|acc, item| format!("{acc},{item}"))
-                    .map(|s| format!("{s},"))
-                    .unwrap_or("".to_string());
                 let sql = format!(
-                    "delete from edge_t where source = ? and code = ? and (uid = ? or gid in ({gid_v}null, '{}'))", auth.uid
+                    "delete from edge_t where source = ? and code = ? {})",
+                    Self::gen_auth_con(auth)
                 );
                 sqlx::query(&sql)
                     .bind(source)
                     .bind(code)
-                    .bind(&auth.uid)
                     .execute(&pool)
                     .await
                     .map_err(|e| Error::new(ErrorKind::Other, e))?;
             }
             Ok(())
+        }
+
+        fn gen_auth_con(auth: &Auth) -> String {
+            if auth.is_root() {
+                return String::new();
+            }
+            match auth {
+                Auth::Writer(paper, _) => format!("and paper = '{paper}'"),
+                Auth::Printer(pen) => format!("and pen = '{pen}'"),
+            }
         }
     }
 }

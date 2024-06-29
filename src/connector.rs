@@ -101,6 +101,8 @@ impl HttpConnector {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use edge_lib::{
         data::{AsDataManager, Auth, MemDataManager},
         util::Path,
@@ -115,12 +117,8 @@ mod tests {
             .build()
             .unwrap()
             .block_on(async {
-                let dm = MemDataManager::new();
-                let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
-                    uid: "root".to_string(),
-                    gid: "root".to_string(),
-                    gid_v: Vec::new(),
-                }));
+                let dm = Arc::new(MemDataManager::new(Auth::printer("root")));
+                let mut edge_engine = EdgeEngine::new(dm.clone());
                 // config.ip, config.port, config.name
                 let name = "test";
                 let ip = "0.0.0.0";
