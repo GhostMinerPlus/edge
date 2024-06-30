@@ -33,8 +33,8 @@ impl HttpConnector {
             .execute1(&ScriptTree {
                 script: [
                     "$->$output = = root->name _",
-                    "$->$output += = root->port _",
-                    "$->$output += = root->path _",
+                    "$->$output append $->$output root->port",
+                    "$->$output append $->$output root->path",
                 ]
                 .join("\n"),
                 name: format!("info"),
