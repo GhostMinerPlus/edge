@@ -266,9 +266,9 @@ mod main {
             }
         };
         match service::get_paper(dm, writer).await {
-            Ok(_) => Response::builder()
+            Ok(s) => Response::builder()
                 .status(StatusCode::OK)
-                .body("success".to_string())
+                .body(s)
                 .unwrap(),
             Err(e) => {
                 log::warn!("{e}\nwhen get_paper");
@@ -290,9 +290,9 @@ mod main {
             }
         };
         match service::get_paper_writer(dm, writer, paper.paper_id).await {
-            Ok(_) => Response::builder()
+            Ok(s) => Response::builder()
                 .status(StatusCode::OK)
-                .body("success".to_string())
+                .body(s)
                 .unwrap(),
             Err(e) => {
                 log::warn!("{e}\nwhen get_paper");
