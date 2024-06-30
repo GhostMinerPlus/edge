@@ -60,6 +60,7 @@ pub async fn login(dm: Arc<dyn AsDataManager>, auth: &crypto::Auth) -> io::Resul
             next_v: vec![],
         })
         .await?;
+    edge_engine.commit().await?;
     if rs["result"].is_empty() {
         return Err(io::Error::other("user not exists"));
     }
@@ -214,6 +215,10 @@ pub async fn get_paper(dm: Arc<dyn AsDataManager>, writer: String) -> err::Resul
         })
         .await
         .map_err(|e| err::Error::Other(e.to_string()))?;
+    edge_engine
+        .commit()
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
     Ok(rs.dump())
 }
 
@@ -232,6 +237,10 @@ pub async fn get_paper_writer(
             name: "writer".to_string(),
             next_v: vec![],
         })
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
+    edge_engine
+        .commit()
         .await
         .map_err(|e| err::Error::Other(e.to_string()))?;
     Ok(rs.dump())
@@ -264,10 +273,6 @@ pub async fn update_paper(
         )
         .await
         .map_err(|e| err::Error::Other(e.to_string()))?;
-        edge_engine
-            .commit()
-            .await
-            .map_err(|e| err::Error::Other(e.to_string()))?;
     } else if is_manager(&dm, &writer, &paper.paper_id).await? {
         dm.set(
             &Path::from_str(&format!("{}->writer", paper.paper_id)),
@@ -275,16 +280,15 @@ pub async fn update_paper(
         )
         .await
         .map_err(|e| err::Error::Other(e.to_string()))?;
-        edge_engine
-            .commit()
-            .await
-            .map_err(|e| err::Error::Other(e.to_string()))?;
     } else {
         return Err(err::Error::Other(
             "you can not update this paper".to_string(),
         ));
     }
-
+    edge_engine
+        .commit()
+        .await
+        .map_err(|e| err::Error::Other(e.to_string()))?;
     Ok(())
 }
 
