@@ -64,7 +64,7 @@ fn main() -> io::Result<()> {
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
             let dm = Arc::new(RecDataManager::new(Arc::new(DbDataManager::new(
                 pool,
-                Auth::printer("root"),
+                Auth::printer(&config.name),
             ))));
             let mut edge_engine = EdgeEngine::new(dm.clone());
             // config.ip, config.port, config.name
