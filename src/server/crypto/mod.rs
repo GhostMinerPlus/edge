@@ -2,15 +2,10 @@ use std::{collections::BTreeMap, io, time};
 
 use hmac::{digest::KeyInit, Hmac};
 use jwt::{AlgorithmType, Header, SignWithKey, Token, VerifyWithKey};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sha2::Sha512;
 
 use crate::{err, util};
-
-#[derive(Debug, Serialize)]
-pub struct User {
-    pub email: String,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct Auth {
@@ -18,7 +13,7 @@ pub struct Auth {
     pub password: String,
 }
 
-pub fn gen_token(key: &str, auth: &Auth, life_op: Option<u64>) -> io::Result<String> {
+pub fn gen_token(key: &str, email: String, life_op: Option<u64>) -> io::Result<String> {
     let key: Hmac<Sha512> =
         Hmac::new_from_slice(&util::hex2byte_v(key)).map_err(|e| io::Error::other(e))?;
     let header = Header {
@@ -34,7 +29,7 @@ pub fn gen_token(key: &str, auth: &Auth, life_op: Option<u64>) -> io::Result<Str
             + life;
         claims.insert("exp", format!("{exp}"));
     }
-    claims.insert("email", auth.email.clone());
+    claims.insert("email", email);
     Ok(Token::new(header, claims)
         .sign_with_key(&key)
         .map_err(|e| io::Error::other(e))?
@@ -42,7 +37,7 @@ pub fn gen_token(key: &str, auth: &Auth, life_op: Option<u64>) -> io::Result<Str
         .to_string())
 }
 
-pub fn parse_token(key: &str, token_str: &str) -> err::Result<User> {
+pub fn parse_token(key: &str, token_str: &str) -> err::Result<String> {
     let key: Hmac<Sha512> = Hmac::new_from_slice(&util::hex2byte_v(key))
         .map_err(|e| err::Error::NotLogin(e.to_string()))?;
     let token: Token<Header, BTreeMap<String, String>, _> = token_str
@@ -64,9 +59,7 @@ pub fn parse_token(key: &str, token_str: &str) -> err::Result<User> {
     let email = claims
         .get("email")
         .ok_or(err::Error::NotLogin("no email".to_string()))?;
-    Ok(User {
-        email: email.clone(),
-    })
+    Ok(email.clone())
 }
 
 #[cfg(test)]
@@ -86,16 +79,8 @@ mod tests {
     #[test]
     fn test() {
         let key = "a";
-        let token = gen_token(
-            key,
-            &super::Auth {
-                email: format!("email"),
-                password: format!("password"),
-            },
-            None,
-        )
-        .unwrap();
-        let user = parse_token(key, &token).unwrap();
-        assert_eq!(user.email, "email");
+        let token = gen_token(key, format!("email"), None).unwrap();
+        let email = parse_token(key, &token).unwrap();
+        assert_eq!(email, "email");
     }
 }

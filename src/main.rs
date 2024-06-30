@@ -3,7 +3,7 @@ use std::{io, sync::Arc, time::Duration};
 use earth::AsConfig;
 use edge::{connector, data::DbDataManager, server};
 use edge_lib::{
-    data::{AsDataManager, Auth, RecDataManager},
+    data::{Auth, RecDataManager},
     EdgeEngine, ScriptTree,
 };
 use serde::{Deserialize, Serialize};
@@ -62,12 +62,11 @@ fn main() -> io::Result<()> {
             let pool = sqlx::Pool::connect(&config.db_url)
                 .await
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
-            let dm = RecDataManager::new(Arc::new(DbDataManager::new(pool)));
-            let mut edge_engine = EdgeEngine::new(dm.divide(Auth {
-                uid: "root".to_string(),
-                gid: "root".to_string(),
-                gid_v: Vec::new(),
-            }));
+            let dm = Arc::new(RecDataManager::new(Arc::new(DbDataManager::new(
+                pool,
+                Auth::printer(&config.name),
+            ))));
+            let mut edge_engine = EdgeEngine::new(dm.clone());
             // config.ip, config.port, config.name
             let base_script = [
                 format!("root->name = = {} _", config.name),
@@ -75,6 +74,7 @@ fn main() -> io::Result<()> {
                 format!("root->port = = {} _", config.port),
                 format!("root->path = = {} _", format!("/{}", config.name)),
                 format!("root->key = = {} _", config.key),
+                format!("root->moon_server = _ _"),
             ]
             .join("\n");
             let option_script = config
@@ -92,22 +92,8 @@ fn main() -> io::Result<()> {
                 .await?;
             edge_engine.commit().await?;
 
-            tokio::spawn(
-                connector::HttpConnector::new(dm.divide(Auth {
-                    uid: "root".to_string(),
-                    gid: "root".to_string(),
-                    gid_v: Vec::new(),
-                }))
-                .run(),
-            );
-            tokio::spawn(
-                server::HttpServer::new(dm.divide(Auth {
-                    uid: "root".to_string(),
-                    gid: "root".to_string(),
-                    gid_v: Vec::new(),
-                }))
-                .run(),
-            );
+            tokio::spawn(connector::HttpConnector::new(dm.clone()).run());
+            tokio::spawn(server::HttpServer::new(dm.clone()).run());
             loop {
                 log::info!("alive");
                 time::sleep(Duration::from_secs(10)).await;
