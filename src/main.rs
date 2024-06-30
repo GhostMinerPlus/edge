@@ -74,6 +74,7 @@ fn main() -> io::Result<()> {
                 format!("root->port = = {} _", config.port),
                 format!("root->path = = {} _", format!("/{}", config.name)),
                 format!("root->key = = {} _", config.key),
+                format!("root->moon_server = _ _"),
             ]
             .join("\n");
             let option_script = config
