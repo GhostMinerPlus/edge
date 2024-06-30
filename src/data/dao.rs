@@ -201,25 +201,16 @@ mod dep {
             source: &str,
             code: &str,
         ) -> io::Result<()> {
-            if auth.is_root() {
-                sqlx::query("delete from edge_t where source = ? and code = ?")
-                    .bind(source)
-                    .bind(code)
-                    .execute(&pool)
-                    .await
-                    .map_err(|e| Error::new(ErrorKind::Other, e))?;
-            } else {
-                let sql = format!(
-                    "delete from edge_t where source = ? and code = ? {})",
-                    Self::gen_auth_con(auth)
-                );
-                sqlx::query(&sql)
-                    .bind(source)
-                    .bind(code)
-                    .execute(&pool)
-                    .await
-                    .map_err(|e| Error::new(ErrorKind::Other, e))?;
-            }
+            let sql = format!(
+                "delete from edge_t where source = ? and code = ? {}",
+                Self::gen_auth_con(auth)
+            );
+            sqlx::query(&sql)
+                .bind(source)
+                .bind(code)
+                .execute(&pool)
+                .await
+                .map_err(|e| Error::new(ErrorKind::Other, e))?;
             Ok(())
         }
 
