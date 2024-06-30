@@ -201,13 +201,13 @@ pub async fn get_paper(dm: Arc<dyn AsDataManager>, writer: String) -> err::Resul
             name: "paper".to_string(),
             next_v: vec![
                 ScriptTree {
-                    script: format!("$->$output = $->$input->name _"),
-                    name: "name".to_string(),
+                    script: format!("$->$output = $->$input _"),
+                    name: "id".to_string(),
                     next_v: vec![],
                 },
                 ScriptTree {
-                    script: format!("$->$output = $->$input->writer _"),
-                    name: "writer".to_string(),
+                    script: format!("$->$output = $->$input->name _"),
+                    name: "name".to_string(),
                     next_v: vec![],
                 },
             ],
